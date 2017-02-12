@@ -1,0 +1,15 @@
+; Cross-editor configuration file (http://editorconfig.org/)
+;
+; Visual Studio:  Please install the EditorConfig extension.
+; Notepad++:      Please install the EditorConfig plugin.
+;
+; Alternatively, manually change editor settings to match the
+; following.
+
+root = true     ; This is the topmost .editorconfig file
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
