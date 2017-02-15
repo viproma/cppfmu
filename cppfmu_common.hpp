@@ -203,11 +203,14 @@ template<typename T, typename... Args>
 T* New(const Memory& memory, Args&&... args)
 {
     auto alloc = Allocator<T>{memory};
-    const auto ptr = alloc.allocate(1);
+    const auto ptr = std::allocator_traits<decltype(alloc)>::allocate(alloc, 1);
     try {
-        alloc.construct(ptr, std::forward<Args>(args)...);
+        std::allocator_traits<decltype(alloc)>::construct(
+            alloc,
+            ptr,
+            std::forward<Args>(args)...);
     } catch (...) {
-        alloc.deallocate(ptr, 1);
+        std::allocator_traits<decltype(alloc)>::deallocate(alloc, ptr, 1);
         throw;
     }
     return ptr;
@@ -221,8 +224,8 @@ template<typename T>
 void Delete(const Memory& memory, T* obj) CPPFMU_NOEXCEPT
 {
     auto alloc = Allocator<T>{memory};
-    alloc.destroy(obj);
-    alloc.deallocate(obj, 1);
+    std::allocator_traits<decltype(alloc)>::destroy(alloc, obj);
+    std::allocator_traits<decltype(alloc)>::deallocate(alloc, obj, 1);
 }
 
 
