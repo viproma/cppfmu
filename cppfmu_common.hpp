@@ -157,7 +157,7 @@ public:
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-    Allocator() : m_fmiAlloc(nullptr), m_fmiFree(nullptr) { }
+    Allocator() : m_memory{fmiCallbackFunctions{}} { }
 #endif
 
 #ifdef _MSC_VER
