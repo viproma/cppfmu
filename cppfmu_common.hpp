@@ -157,7 +157,10 @@ public:
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
     Allocator() : m_memory{fmiCallbackFunctions{}} { }
+#pragma GCC diagnostic pop
 #endif
 
 #ifdef _MSC_VER

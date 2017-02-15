@@ -304,10 +304,10 @@ DllExport fmiStatus fmiSetString  (fmiComponent c, const fmiValueReference vr[],
 
 DllExport fmiStatus fmiSetRealInputDerivatives(
     fmiComponent c,
-    const  fmiValueReference vr[],
-    size_t nvr,
-    const  fmiInteger order[],
-    const  fmiReal value[])
+    const  fmiValueReference /*vr*/[],
+    size_t /*nvr*/,
+    const  fmiInteger /*order*/[],
+    const  fmiReal /*value*/[])
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -319,10 +319,10 @@ DllExport fmiStatus fmiSetRealInputDerivatives(
 
 DllExport fmiStatus fmiGetRealOutputDerivatives(
     fmiComponent c,
-    const   fmiValueReference vr[],
-    size_t  nvr,
-    const   fmiInteger order[],
-    fmiReal value[])
+    const   fmiValueReference /*vr*/[],
+    size_t  /*nvr*/,
+    const   fmiInteger /*order*/[],
+    fmiReal /*value*/[])
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -377,8 +377,8 @@ DllExport fmiStatus fmiDoStep(
 
 DllExport fmiStatus fmiGetStatus(
     fmiComponent c,
-    const fmiStatusKind s,
-    fmiStatus* value)
+    const fmiStatusKind /*s*/,
+    fmiStatus* /*value*/)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -410,8 +410,8 @@ DllExport fmiStatus fmiGetRealStatus(
 
 DllExport fmiStatus fmiGetIntegerStatus(
     fmiComponent c,
-    const fmiStatusKind s,
-    fmiInteger* value)
+    const fmiStatusKind /*s*/,
+    fmiInteger* /*value*/)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -424,8 +424,8 @@ DllExport fmiStatus fmiGetIntegerStatus(
 
 DllExport fmiStatus fmiGetBooleanStatus(
     fmiComponent c,
-    const fmiStatusKind s,
-    fmiBoolean* value)
+    const fmiStatusKind /*s*/,
+    fmiBoolean* /*value*/)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -435,7 +435,10 @@ DllExport fmiStatus fmiGetBooleanStatus(
 }
 
 
-DllExport fmiStatus fmiGetStringStatus (fmiComponent c, const fmiStatusKind s, fmiString*  value)
+DllExport fmiStatus fmiGetStringStatus(
+    fmiComponent c,
+    const fmiStatusKind /*s*/,
+    fmiString*  /*value*/)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
