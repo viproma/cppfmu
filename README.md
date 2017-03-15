@@ -27,7 +27,7 @@ already brought the issue up, and we will also be very happy if
 you label your issue appropriately.
 
 Contributions are very welcome, and should be submitted as
-[pull requests on GitHub](https://github.com/viproma/coral/pulls).
+[pull requests on GitHub](https://github.com/viproma/cppfmu/pulls).
 
 
 Building
