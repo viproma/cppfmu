@@ -1,4 +1,4 @@
-/* Copyright 2016-2017, SINTEF Ocean.
+/* Copyright 2016-2019, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -32,6 +32,20 @@ extern "C"
 namespace cppfmu
 {
 
+// Aliases for FMI types
+typedef fmiReal FMIReal;
+typedef fmiInteger FMIInteger;
+typedef fmiBoolean FMIBoolean;
+typedef fmiString FMIString;
+typedef fmiCallbackFunctions FMICallbackFunctions;
+typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
+typedef fmiCallbackLogger FMICallbackLogger;
+typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
+typedef fmiComponent FMIComponent;
+typedef fmiStatus FMIStatus;
+typedef fmiValueReference FMIValueReference;
+
+
 // ============================================================================
 // ERROR HANDLING
 // ============================================================================
@@ -60,7 +74,7 @@ public:
 class Memory
 {
 public:
-    explicit Memory(const fmiCallbackFunctions& callbackFunctions)
+    explicit Memory(const FMICallbackFunctions& callbackFunctions)
         : m_alloc{callbackFunctions.allocateMemory}
         , m_free{callbackFunctions.freeMemory}
     {
@@ -89,8 +103,8 @@ public:
     }
 
 private:
-    fmiCallbackAllocateMemory m_alloc;
-    fmiCallbackFreeMemory m_free;
+    FMICallbackAllocateMemory m_alloc;
+    FMICallbackFreeMemory m_free;
 };
 
 
@@ -192,7 +206,7 @@ using String = std::basic_string<char, std::char_traits<char>, Allocator<char>>;
 
 
 // Returns a String whose contents are equal to those of 'string'.
-inline String CopyString(const Memory& memory, fmiString string)
+inline String CopyString(const Memory& memory, FMIString string)
 {
     return String{string, Allocator<char>{memory}};
 }
@@ -265,9 +279,9 @@ class Logger
 {
 public:
     Logger(
-        fmiComponent component,
+        FMIComponent component,
         String instanceName,
-        fmiCallbackFunctions callbackFunctions,
+        FMICallbackFunctions callbackFunctions,
         std::shared_ptr<bool> debugLoggingEnabled)
         : m_component{component}
         , m_instanceName(std::move(instanceName))
@@ -279,9 +293,9 @@ public:
     // Logs a message.
     template<typename... Args>
     void Log(
-        fmiStatus status,
-        fmiString category,
-        fmiString message,
+        FMIStatus status,
+        FMIString category,
+        FMIString message,
         Args&&... args) CPPFMU_NOEXCEPT
     {
         m_fmiLogger(
@@ -313,9 +327,9 @@ public:
     }
 
 private:
-    const fmiComponent m_component;
+    const FMIComponent m_component;
     const String m_instanceName;
-    const fmiCallbackLogger m_fmiLogger;
+    const FMICallbackLogger m_fmiLogger;
     std::shared_ptr<bool> m_debugLoggingEnabled;
 };
 

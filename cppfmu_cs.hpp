@@ -1,4 +1,4 @@
-/* Copyright 2016-2017, SINTEF Ocean.
+/* Copyright 2016-2019, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -32,9 +32,9 @@ class SlaveInstance
 public:
     // Called from fmiInitializeSlave(). Does nothing by default.
     virtual void Initialize(
-        fmiReal tStart,
-        fmiBoolean stopTimeDefined,
-        fmiReal tStop);
+        FMIReal tStart,
+        FMIBoolean stopTimeDefined,
+        FMIReal tStop);
 
     // Called from fmiTerminateSlave(). Does nothing by default.
     virtual void Terminate();
@@ -44,46 +44,46 @@ public:
 
     // Called from fmiSetXxx(). Throw std::logic_error by default.
     virtual void SetReal(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        const fmiReal value[]);
+        const FMIReal value[]);
     virtual void SetInteger(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        const fmiInteger value[]);
+        const FMIInteger value[]);
     virtual void SetBoolean(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        const fmiBoolean value[]);
+        const FMIBoolean value[]);
     virtual void SetString(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        const fmiString value[]);
+        const FMIString value[]);
 
     // Called from fmiGetXxx(). Throw std::logic_error by default.
     virtual void GetReal(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        fmiReal value[]) const;
+        FMIReal value[]) const;
     virtual void GetInteger(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        fmiInteger value[]) const;
+        FMIInteger value[]) const;
     virtual void GetBoolean(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        fmiBoolean value[]) const;
+        FMIBoolean value[]) const;
     virtual void GetString(
-        const fmiValueReference vr[],
+        const FMIValueReference vr[],
         std::size_t nvr,
-        fmiString value[]) const;
+        FMIString value[]) const;
 
     // Called from fmiDoStep(). Must be implemented in model code.
     virtual bool DoStep(
-        fmiReal currentCommunicationPoint,
-        fmiReal communicationStepSize,
-        fmiBoolean newStep,
-        fmiReal& endOfStep) = 0;
+        FMIReal currentCommunicationPoint,
+        FMIReal communicationStepSize,
+        FMIBoolean newStep,
+        FMIReal& endOfStep) = 0;
 
     // The instance is destroyed in fmiFreeSlaveInstance().
     virtual ~SlaveInstance() CPPFMU_NOEXCEPT;
@@ -116,13 +116,13 @@ public:
  * Note that this function is declared in the global namespace.
  */
 cppfmu::UniquePtr<cppfmu::SlaveInstance> CppfmuInstantiateSlave(
-    fmiString  instanceName,
-    fmiString  fmuGUID,
-    fmiString  fmuLocation,
-    fmiString  mimeType,
-    fmiReal    timeout,
-    fmiBoolean visible,
-    fmiBoolean interactive,
+    cppfmu::FMIString instanceName,
+    cppfmu::FMIString fmuGUID,
+    cppfmu::FMIString fmuLocation,
+    cppfmu::FMIString mimeType,
+    cppfmu::FMIReal timeout,
+    cppfmu::FMIBoolean visible,
+    cppfmu::FMIBoolean interactive,
     cppfmu::Memory memory,
     cppfmu::Logger logger);
 

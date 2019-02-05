@@ -1,4 +1,4 @@
-/* Copyright 2016-2017, SINTEF Ocean.
+/* Copyright 2016-2019, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -15,9 +15,9 @@ namespace
     struct Component
     {
         Component(
-            fmiString instanceName,
-            fmiCallbackFunctions callbackFunctions,
-            fmiBoolean loggingOn)
+            cppfmu::FMIString instanceName,
+            cppfmu::FMICallbackFunctions callbackFunctions,
+            cppfmu::FMIBoolean loggingOn)
             : memory{callbackFunctions}
             , debugLoggingEnabled{std::make_shared<bool>(loggingOn == fmiTrue)}
             , logger{this, cppfmu::CopyString(memory, instanceName), callbackFunctions, debugLoggingEnabled}
@@ -32,7 +32,7 @@ namespace
 
         // Co-simulation
         cppfmu::UniquePtr<cppfmu::SlaveInstance> slave;
-        fmiReal lastSuccessfulTime;
+        cppfmu::FMIReal lastSuccessfulTime;
     };
 }
 

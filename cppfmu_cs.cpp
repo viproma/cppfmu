@@ -1,4 +1,4 @@
-/* Copyright 2016-2017, SINTEF Ocean.
+/* Copyright 2016-2019, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -17,9 +17,9 @@ namespace cppfmu
 
 
 void SlaveInstance::Initialize(
-    fmiReal /*tStart*/,
-    fmiBoolean /*stopTimeDefined*/,
-    fmiReal /*tStop*/)
+    FMIReal /*tStart*/,
+    FMIBoolean /*stopTimeDefined*/,
+    FMIReal /*tStop*/)
 {
     // Do nothing
 }
@@ -38,9 +38,9 @@ void SlaveInstance::Reset()
 
 
 void SlaveInstance::SetReal(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    const fmiReal /*value*/[])
+    const FMIReal /*value*/[])
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
@@ -49,9 +49,9 @@ void SlaveInstance::SetReal(
 
 
 void SlaveInstance::SetInteger(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    const fmiInteger /*value*/[])
+    const FMIInteger /*value*/[])
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
@@ -60,9 +60,9 @@ void SlaveInstance::SetInteger(
 
 
 void SlaveInstance::SetBoolean(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    const fmiBoolean /*value*/[])
+    const FMIBoolean /*value*/[])
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
@@ -71,9 +71,9 @@ void SlaveInstance::SetBoolean(
 
 
 void SlaveInstance::SetString(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    const fmiString /*value*/[])
+    const FMIString /*value*/[])
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
@@ -82,9 +82,9 @@ void SlaveInstance::SetString(
 
 
 void SlaveInstance::GetReal(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    fmiReal /*value*/[]) const
+    FMIReal /*value*/[]) const
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to get nonexistent variable");
@@ -93,9 +93,9 @@ void SlaveInstance::GetReal(
 
 
 void SlaveInstance::GetInteger(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    fmiInteger /*value*/[]) const
+    FMIInteger /*value*/[]) const
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to get nonexistent variable");
@@ -104,9 +104,9 @@ void SlaveInstance::GetInteger(
 
 
 void SlaveInstance::GetBoolean(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    fmiBoolean /*value*/[]) const
+    FMIBoolean /*value*/[]) const
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
@@ -115,9 +115,9 @@ void SlaveInstance::GetBoolean(
 
 
 void SlaveInstance::GetString(
-    const fmiValueReference /*vr*/[],
+    const FMIValueReference /*vr*/[],
     std::size_t nvr,
-    fmiString /*value*/[]) const
+    FMIString /*value*/[]) const
 {
     if (nvr != 0) {
         throw std::logic_error("Attempted to set nonexistent variable");
