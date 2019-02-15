@@ -6,6 +6,7 @@
 #ifndef CPPFMU_COMMON_HPP
 #define CPPFMU_COMMON_HPP
 
+#include <algorithm>    // std::find()
 #include <cstddef>      // std::size_t
 #include <functional>   // std::function
 #include <memory>       // std::shared_ptr, std::unique_ptr
@@ -17,7 +18,11 @@
 
 extern "C"
 {
-#include <fmiFunctions.h>
+#ifdef CPPFMU_USE_FMI_1_0
+#   include <fmiFunctions.h>
+#else
+#   include <fmi2Functions.h>
+#endif
 }
 
 
@@ -32,18 +37,54 @@ extern "C"
 namespace cppfmu
 {
 
-// Aliases for FMI types
-typedef fmiReal FMIReal;
-typedef fmiInteger FMIInteger;
-typedef fmiBoolean FMIBoolean;
-typedef fmiString FMIString;
-typedef fmiCallbackFunctions FMICallbackFunctions;
-typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
-typedef fmiCallbackLogger FMICallbackLogger;
-typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
-typedef fmiComponent FMIComponent;
-typedef fmiStatus FMIStatus;
-typedef fmiValueReference FMIValueReference;
+// Aliases for FMI types and enums
+#ifdef CPPFMU_USE_FMI_1_0
+    typedef fmiReal FMIReal;
+    typedef fmiInteger FMIInteger;
+    typedef fmiBoolean FMIBoolean;
+    typedef fmiString FMIString;
+    typedef fmiCallbackFunctions FMICallbackFunctions;
+    typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
+    typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
+    typedef fmiCallbackLogger FMICallbackLogger;
+    typedef fmiComponent FMIComponent;
+    typedef fmiComponent FMIComponentEnvironment;
+    typedef fmiStatus FMIStatus;
+    typedef fmiValueReference FMIValueReference;
+
+    const FMIBoolean FMIFalse = fmiFalse;
+    const FMIBoolean FMITrue = fmiTrue;
+
+    const FMIStatus FMIOK = fmiOK;
+    const FMIStatus FMIWarning = fmiWarning;
+    const FMIStatus FMIDiscard = fmiDiscard;
+    const FMIStatus FMIError = fmiError;
+    const FMIStatus FMIFatal = fmiFatal;
+    const FMIStatus FMIPending = fmiPending;
+#else
+    typedef fmi2Real FMIReal;
+    typedef fmi2Integer FMIInteger;
+    typedef fmi2Boolean FMIBoolean;
+    typedef fmi2String FMIString;
+    typedef fmi2CallbackFunctions FMICallbackFunctions;
+    typedef fmi2CallbackAllocateMemory FMICallbackAllocateMemory;
+    typedef fmi2CallbackFreeMemory FMICallbackFreeMemory;
+    typedef fmi2CallbackLogger FMICallbackLogger;
+    typedef fmi2Component FMIComponent;
+    typedef fmi2ComponentEnvironment FMIComponentEnvironment;
+    typedef fmi2Status FMIStatus;
+    typedef fmi2ValueReference FMIValueReference;
+
+    const FMIBoolean FMIFalse = fmi2False;
+    const FMIBoolean FMITrue = fmi2True;
+
+    const FMIStatus FMIOK = fmi2OK;
+    const FMIStatus FMIWarning = fmi2Warning;
+    const FMIStatus FMIDiscard = fmi2Discard;
+    const FMIStatus FMIError = fmi2Error;
+    const FMIStatus FMIFatal = fmi2Fatal;
+    const FMIStatus FMIPending = fmi2Pending;
+#endif
 
 
 // ============================================================================
@@ -271,6 +312,18 @@ UniquePtr<T> AllocateUnique(const Memory& memory, Args&&... args)
 // LOGGING
 // ============================================================================
 
+namespace detail
+{
+    template<typename Container, typename Item>
+    bool CanFind(const Container& container, const Item& item)
+    {
+        return container.end() != std::find(
+            container.begin(),
+            container.end(),
+            item);
+    }
+}
+
 
 /* A class that can be used to log messages from model code.  All messages are
  * forwarded to the logging facilities provided by the simulation environment.
@@ -278,15 +331,25 @@ UniquePtr<T> AllocateUnique(const Memory& memory, Args&&... args)
 class Logger
 {
 public:
+    struct Settings
+    {
+        Settings(const Memory& memory)
+            : loggedCategories(Allocator<String>{memory})
+        { }
+
+        bool debugLoggingEnabled = false;
+        std::vector<String, Allocator<String>> loggedCategories;
+    };
+
     Logger(
-        FMIComponent component,
+        FMIComponentEnvironment component,
         String instanceName,
         FMICallbackFunctions callbackFunctions,
-        std::shared_ptr<bool> debugLoggingEnabled)
+        std::shared_ptr<Settings> settings)
         : m_component{component}
         , m_instanceName(std::move(instanceName))
         , m_fmiLogger{callbackFunctions.logger}
-        , m_debugLoggingEnabled{debugLoggingEnabled}
+        , m_settings{settings}
     {
     }
 
@@ -298,13 +361,16 @@ public:
         FMIString message,
         Args&&... args) CPPFMU_NOEXCEPT
     {
-        m_fmiLogger(
-            m_component,
-            m_instanceName.c_str(),
-            status,
-            category,
-            message,
-            std::forward<Args>(args)...);
+        if (m_settings->loggedCategories.empty() ||
+            detail::CanFind(m_settings->loggedCategories, category)) {
+            m_fmiLogger(
+                m_component,
+                m_instanceName.c_str(),
+                status,
+                category,
+                message,
+                std::forward<Args>(args)...);
+        }
     }
 
     /* Logs a debug message (if debug logging is enabled by the simulation
@@ -312,12 +378,12 @@ public:
      */
     template<typename... Args>
     void DebugLog(
-        fmiStatus status,
-        fmiString category,
-        fmiString message,
+        FMIStatus status,
+        FMIString category,
+        FMIString message,
         Args&&... args) CPPFMU_NOEXCEPT
     {
-        if (*m_debugLoggingEnabled) {
+        if (m_settings->debugLoggingEnabled) {
             Log(
                 status,
                 category,
@@ -327,10 +393,10 @@ public:
     }
 
 private:
-    const FMIComponent m_component;
+    const FMIComponentEnvironment m_component;
     const String m_instanceName;
     const FMICallbackLogger m_fmiLogger;
-    std::shared_ptr<bool> m_debugLoggingEnabled;
+    std::shared_ptr<Settings> m_settings;
 };
 
 

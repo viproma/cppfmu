@@ -31,10 +31,16 @@ class SlaveInstance
 {
 public:
     // Called from fmiInitializeSlave(). Does nothing by default.
-    virtual void Initialize(
+    virtual void SetupExperiment(
+        FMIBoolean toleranceDefined,
+        FMIReal tolerance,
         FMIReal tStart,
         FMIBoolean stopTimeDefined,
         FMIReal tStop);
+
+    virtual void EnterInitializationMode();
+
+    virtual void ExitInitializationMode();
 
     // Called from fmiTerminateSlave(). Does nothing by default.
     virtual void Terminate();
@@ -118,7 +124,7 @@ public:
 cppfmu::UniquePtr<cppfmu::SlaveInstance> CppfmuInstantiateSlave(
     cppfmu::FMIString instanceName,
     cppfmu::FMIString fmuGUID,
-    cppfmu::FMIString fmuLocation,
+    cppfmu::FMIString fmuResourceLocation,
     cppfmu::FMIString mimeType,
     cppfmu::FMIReal timeout,
     cppfmu::FMIBoolean visible,

@@ -16,10 +16,24 @@ namespace cppfmu
 // =============================================================================
 
 
-void SlaveInstance::Initialize(
+void SlaveInstance::SetupExperiment(
+    FMIBoolean /*toleranceDefined*/,
+    FMIReal /*tolerance*/,
     FMIReal /*tStart*/,
     FMIBoolean /*stopTimeDefined*/,
     FMIReal /*tStop*/)
+{
+    // Do nothing
+}
+
+
+void SlaveInstance::EnterInitializationMode()
+{
+    // Do nothing
+}
+
+
+void SlaveInstance::ExitInitializationMode()
 {
     // Do nothing
 }
