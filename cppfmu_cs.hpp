@@ -23,14 +23,17 @@ namespace cppfmu
  * from this one and override its virtual methods as required.  DoStep() is
  * the only function which it is mandatory to override.
  *
- * The methods map directly to the C functions defined by FMI 1.0, so the
- * documentation here is intentionally sparse.  We refer to the FMI 1.0
- * specification for detailed information.
+ * The methods map directly to the C functions defined by FMI 2.0 (and, with
+ * some adaptations, FMI 1.0), so the documentation here is intentionally
+ * sparse.  We refer to the FMI specifications for detailed information.
  */
 class SlaveInstance
 {
 public:
-    // Called from fmiInitializeSlave(). Does nothing by default.
+    /* Called from fmi2SetupExperiment() (FMI 2.0) or fmiInitializeSlave()
+     * (FMI 1.0).
+     * Does nothing by default.
+     */
     virtual void SetupExperiment(
         FMIBoolean toleranceDefined,
         FMIReal tolerance,
@@ -38,17 +41,31 @@ public:
         FMIBoolean stopTimeDefined,
         FMIReal tStop);
 
+    /* Called from fmi2EnterInitializationMode() (FMI 2.0) or
+     * fmiInitializeSlave() (FMI 1.0).
+     * Does nothing by default.
+     */
     virtual void EnterInitializationMode();
 
+    /* Called from fmi2ExitInitializationMode() (FMI 2.0) or
+     * fmiInitializeSlave() (FMI 1.0).
+     * Does nothing by default.
+     */
     virtual void ExitInitializationMode();
 
-    // Called from fmiTerminateSlave(). Does nothing by default.
+    /* Called from fmi2Terminate()/fmiTerminateSlave().
+     * Does nothing by default.
+     */
     virtual void Terminate();
 
-    // Called from fmiResetSlave(). Does nothing by default.
+    /* Called from fmi2Reset()/fmiResetSlave().
+     * Does nothing by default.
+     */
     virtual void Reset();
 
-    // Called from fmiSetXxx(). Throw std::logic_error by default.
+    /* Called from fmi2SetXxx()/fmiSetXxx().
+     * Throws std::logic_error by default.
+     */
     virtual void SetReal(
         const FMIValueReference vr[],
         std::size_t nvr,
@@ -66,7 +83,9 @@ public:
         std::size_t nvr,
         const FMIString value[]);
 
-    // Called from fmiGetXxx(). Throw std::logic_error by default.
+    /* Called from fmi2GetXxx()/fmiGetXxx().
+     * Throws std::logic_error by default.
+     */
     virtual void GetReal(
         const FMIValueReference vr[],
         std::size_t nvr,
@@ -84,14 +103,14 @@ public:
         std::size_t nvr,
         FMIString value[]) const;
 
-    // Called from fmiDoStep(). Must be implemented in model code.
+    // Called from fmi2DoStep()/fmiDoStep(). Must be implemented in model code.
     virtual bool DoStep(
         FMIReal currentCommunicationPoint,
         FMIReal communicationStepSize,
         FMIBoolean newStep,
         FMIReal& endOfStep) = 0;
 
-    // The instance is destroyed in fmiFreeSlaveInstance().
+    // The instance is destroyed in fmi2FreeInstance()/fmiFreeSlaveInstance().
     virtual ~SlaveInstance() CPPFMU_NOEXCEPT;
 };
 
@@ -106,9 +125,9 @@ public:
  * The simplest way to set this up is to use cppfmu::AllocateUnique() to
  * create the slave instance.
  *
- * Most of its parameters correspond to those of fmiInstantiateSlave(),
- * except that 'functions' and 'loggingOn' have been replaced with more
- * convenient types:
+ * Most of its parameters correspond to those of fmi2Instantiate() and
+ * fmiInstantiateSlave(), except that 'functions' and 'loggingOn' have been
+ * replaced with more convenient types:
  *
  *     memory = An object which the model code can use for memory management,
  *              typically in conjunction with cppfmu::Allocator,
