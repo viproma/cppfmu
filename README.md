@@ -9,10 +9,10 @@ CPPFMU lets you write object-oriented C++ code, using high-level
 features such as exceptions and automatic memory management,
 rather than implement the low-level C functions specified by FMI.
 
-Currently, only FMI for Co-simulation v1.0 is supported. Support
-for Model Exchange and FMI 2.0 is planned.  (Therefore, we'll
-continue to write "model/slave code", even though it's only the
-latter which is relevant for the time being.)
+Currently, only FMI for Co-simulation is supported. Support for Model
+Exchange is planned.  (Therefore, we'll continue to write "model/slave
+code", even though it's only the latter which is relevant for the time
+being.)
 
 CPPFMU was developed as part of the R&D project [Virtual Prototyping
 of Maritime Systems and Operations](http://viproma.no) (ViProMa), and
