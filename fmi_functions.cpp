@@ -20,7 +20,11 @@ namespace
             cppfmu::FMIBoolean loggingOn)
             : memory{callbackFunctions}
             , loggerSettings{std::make_shared<cppfmu::Logger::Settings>(memory)}
+#ifdef CPPFMU_USE_FMI_1_0
             , logger{this, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
+#else
+            , logger{callbackFunctions.componentEnvironment, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
+#endif
             , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
         {
             loggerSettings->debugLoggingEnabled = (loggingOn == cppfmu::FMITrue);
