@@ -47,4 +47,4 @@ jobs:
             --version ${{ matrix.version }} --user sintef --channel ${{ matrix.channel }} \
             -b missing -b outdated -b "${{ env.pkg_name }}*" .
       - name: Conan upload
-        run: conan upload --confirm -r sintef ${{ env.pkg_name }}* --force
+        run: conan upload --confirm -r sintef "${{ env.pkg_name }}*" --force
