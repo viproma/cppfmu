@@ -32,11 +32,11 @@ Contributions are very welcome, and should be submitted as
 
 Building
 --------
-CPPFMU does not come with any makefiles or other build scripts.
-You just include the headers in your model/slave code and compile
-the `.cpp` files together with yours, and you're good to go.
-A good tip is to include the CPPFMU repository as a Git submodule
-in your own repository.
+
+CPPFMU can be used by just including the headers in your model/slave
+code and compile the `.cpp` files together with yours, and you're good to go.
+A good tip is to include the CPPFMU repository as a Git submodule in
+your own repository.
 
 Note that this repository does not contain the FMI header files;
 you'll have to get them yourself and make sure your compiler can
@@ -46,8 +46,48 @@ You'll also need a compiler with decent C++11 support.  The
 following are known to work (and newer versions of these ought to
 work as well):
 
-  * Microsoft Visual C++ 12.0 (Visual Studi0 2013)
+  * Microsoft Visual C++ 12.0 (Visual Studio 2013)
   * GCC 4.9
+
+### Conan recipe
+
+We also provide a [Conan](https://conan.io) recipe. This recipe builds a static library
+for CPPFMU that you can use in your code, but you still need to compile
+`fmi_functions.cpp`. The package can be created with `conan create . --user sintef
+--channel stable`. The recipe and some precompiled binaries are available on Sintef
+Ocean's public artifactory], which can be added with `conan remote add sintef-public
+https://artifactory.smd.sintef.no/artifactory/api/conan/conan-local`. Note that when using
+the conan recipe, FMI 1 or 2 is added as a dependency, so you do not need to fetch them
+yourself. To use CPPFMU with conan, add the following lines to your `conanfile.py` and
+`CMakeLists.txt`:
+
+`conanfile.py`:
+```python
+  ...
+  def requirements(self):
+      self.requires("cppfmu/1.0@sintef/stable")
+
+  def generate(self):
+      # Copy fmi_function.cpp to your binary directory
+      for require, dep in self.dependencies.items():
+          if require.build or require.test:
+              continue
+      if dep.ref.name == "cppfmu":
+          copy(self, "fmi_functions.cpp",
+              dep.cpp_info.srcdirs[0],
+              path.join(self.build_folder, dep.ref.name),
+              keep_path=False)
+```
+
+`CMakeLists.txt`:
+```cmake
+  find_package(cppfmu REQUIRED)
+  add_library(FmuModuleTarget MODULE
+    ${fmuSourceFiles}
+    ${CMAKE_BINARY_DIR}/cppfmu/fmi_functions.cpp
+    )
+  target_link_libraries(FmuModuleTarget PUBLIC cppfmu::cppfmu)
+```
 
 How it works
 ------------
