@@ -20,7 +20,7 @@ jobs:
         build_type: [Debug, Release]
         profile: [msvc17]
         compiler_version: [192, 193]
-        channel: ["${{ (github.head_ref || github.ref_name) == 'master' && 'stable' || 'testing' }}"]
+        channel: ["${{ github.ref_type == 'tag' && 'stable' || 'testing' }}"]
     steps:
       - uses: actions/checkout@v4
       - name: Install prerequisites
