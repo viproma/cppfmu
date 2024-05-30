@@ -16,7 +16,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.0"]
         build_type: [Debug, Release]
         profile: [msvc17]
         compiler_version: [192, 193]
@@ -39,7 +38,7 @@ jobs:
           conan create -s build_type=${{ matrix.build_type }} `
             -s compiler.version=${{ matrix.compiler_version }} `
             -pr:b=${{ matrix.profile }} -pr:h=${{ matrix.profile }} `
-            --version ${{ matrix.version }} --user sintef --channel ${{ matrix.channel }} `
+            --user sintef --channel ${{ matrix.channel }} `
             -b missing -b outdated -b "${{ env.pkg_name }}*" .
       - name: Conan upload
         run: conan upload --confirm -r sintef "${{ env.pkg_name }}*" --force
