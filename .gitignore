@@ -1,4 +1,4 @@
 *.swp
-build/
 build*/
-test_package/CMakeUserPresets.json
+CMakeUserPresets.json
+/compile_commands.json
