@@ -139,6 +139,48 @@ void SlaveInstance::GetString(
 }
 
 
+void SlaveInstance::GetFMUState(FMIFMUState* state)
+{
+    throw std::logic_error("Operation not supported: get FMU state");
+}
+
+
+void SlaveInstance::SetFMUState(FMIFMUState state)
+{
+    throw std::logic_error("Operation not supported: set FMU state");
+}
+
+
+void SlaveInstance::FreeFMUState(FMIFMUState state)
+{
+    throw std::logic_error("Operation not supported: free FMU state");
+}
+
+
+std::size_t SlaveInstance::SerializedFMUStateSize(FMIFMUState state)
+{
+    throw std::logic_error("Operation not supported: get serialized FMU state size");
+}
+
+
+void SlaveInstance::SerializeFMUState(
+    FMIFMUState state,
+    FMIByte data[],
+    std::size_t size)
+{
+    throw std::logic_error("Operation not supported: serialize FMU state");
+}
+
+
+FMIFMUState SlaveInstance::DeserializeFMUState(
+    const FMIByte data[],
+    std::size_t size)
+{
+    throw std::logic_error("Operation not supported: deserialize FMU state");
+}
+
+
+
 SlaveInstance::~SlaveInstance() CPPFMU_NOEXCEPT
 {
     // Do nothing

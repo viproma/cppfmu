@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 
 const double TEST_VALUE = 2.0;
@@ -24,6 +25,7 @@ extern "C" void logger(
     va_list args;
     va_start(args, message);
     std::vfprintf(stderr, message, args);
+    std::fprintf(stderr, "\n");
     va_end(args);
 }
 
@@ -53,40 +55,116 @@ int main()
         fmi2True);
     assert(instance);
 
-    const auto setupResult = fmi2SetupExperiment(
-        instance,
-        fmi2False,
-        0.0,
-        0.0,
-        fmi2False,
-        0.0);
-    assert(setupResult == fmi2OK);
+    {
+        const auto rc = fmi2SetupExperiment(
+            instance,
+            fmi2False,
+            0.0,
+            0.0,
+            fmi2False,
+            0.0);
+        assert(rc == fmi2OK);
+    }
 
     // Initialization
-    const auto initResult = fmi2EnterInitializationMode(instance);
-    assert(initResult == fmi2OK);
+    {
+        const auto rc = fmi2EnterInitializationMode(instance);
+        assert(rc == fmi2OK);
+    }
 
     const fmi2ValueReference validVr = 0;
-    const auto setResult = fmi2SetReal(instance, &validVr, 1, &TEST_VALUE);
-    assert(setResult == fmi2OK);
+    const fmi2Real value1 = 1.0;
+    {
+        const auto rc = fmi2SetReal(instance, &validVr, 1, &value1);
+        assert(rc == fmi2OK);
+    }
+    {
+        fmi2Real val = 0.0;
+        const auto rc = fmi2GetReal(instance, &validVr, 1, &val);
+        assert(rc == fmi2OK);
+        assert(val == value1);
+    }
 
-    fmi2Real value = 0.0;
-    const auto validGetResult = fmi2GetReal(instance, &validVr, 1, &value);
-    assert(validGetResult == fmi2OK);
-    assert(value == TEST_VALUE);
+    {
+        const auto rc = fmi2ExitInitializationMode(instance);
+        assert(rc == fmi2OK);
+    }
 
-    const auto endInitResult = fmi2ExitInitializationMode(instance);
-    assert(endInitResult == fmi2OK);
+    // Save state
+    fmi2FMUstate state = nullptr;
+    {
+        const auto rc = fmi2GetFMUstate(instance, &state);
+        assert(rc == fmi2OK);
+        assert(state != nullptr);
+    }
+    std::size_t stateSize = 0;
+    {
+        const auto rc = fmi2SerializedFMUstateSize(instance, state, &stateSize);
+        assert(rc == fmi2OK);
+    }
+    assert(stateSize > 0);
+    auto serializedState = std::vector<fmi2Byte>(stateSize);
+    {
+        const auto rc = fmi2SerializeFMUstate(
+            instance, state, serializedState.data(), serializedState.size());
+        assert(rc == fmi2OK);
+    }
+    {
+        const auto rc = fmi2FreeFMUstate(instance, &state);
+        assert(rc == fmi2OK);
+        assert(state == nullptr);
+    }
 
     // Simulation
-    const auto stepResult = fmi2DoStep(instance, 0.0,0.1, fmi2False);
-    assert(stepResult == fmi2OK);
-
-    const fmi2ValueReference invalidVr = 1;
-    value = -1.0;
-    const auto invalidGetResult = fmi2GetReal(instance, &invalidVr, 1, &value);
-    assert(invalidGetResult == fmi2Error);
-    assert(value == -1.0);
+    {
+        const auto rc = fmi2DoStep(instance, 0.0, 0.1, fmi2False);
+        assert(rc == fmi2OK);
+    }
+    const fmi2Real value2 = 2.0;
+    {
+        const auto rc = fmi2SetReal(instance, &validVr, 1, &value2);
+        assert(rc == fmi2OK);
+    }
+    {
+        const auto rc = fmi2DoStep(instance, 0.0, 0.1, fmi2False);
+        assert(rc == fmi2OK);
+    }
+    {
+        fmi2Real val = 0.0;
+        const auto rc = fmi2GetReal(instance, &validVr, 1, &val);
+        assert(rc == fmi2OK);
+        assert(val == value2);
+    }
+    fmi2FMUstate restoredState = nullptr;
+    {
+        const auto rc = fmi2DeSerializeFMUstate(
+            instance, serializedState.data(), serializedState.size(), &restoredState);
+        assert(rc == fmi2OK);
+        assert(restoredState != nullptr);
+    }
+    {
+        const auto rc = fmi2SetFMUstate(instance, restoredState);
+        assert(rc == fmi2OK);
+    }
+    {
+        const auto rc = fmi2FreeFMUstate(instance, &restoredState);
+        assert(rc == fmi2OK);
+        assert(restoredState == nullptr);
+    }
+    {
+        fmi2Real val = 0.0;
+        const auto rc = fmi2GetReal(instance, &validVr, 1, &val);
+        assert(rc == fmi2OK);
+        assert(val == value1);
+    }
+    {
+        const fmi2ValueReference invalidVr = 1;
+        fmi2Real val = -1.0;
+        const auto rc = fmi2GetReal(instance, &invalidVr, 1, &val);
+        assert(rc == fmi2Error);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+        assert(val == -1.0);
+    }
 
     // Termination
     const auto terminateResult = fmi2Terminate(instance);

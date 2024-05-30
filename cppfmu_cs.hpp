@@ -103,6 +103,47 @@ public:
         std::size_t nvr,
         FMIString value[]) const;
 
+    /* Called from fmi2GetFMUState().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual void GetFMUState(FMIFMUState* state);
+
+    /* Called from fmi2SetFMUstate().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual void SetFMUState(FMIFMUState state);
+
+    /* Called from fmi2FreeFMUstate().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual void FreeFMUState(FMIFMUState state);
+
+    /* Called from fmi2SerializedFMUstateSize().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual std::size_t SerializedFMUStateSize(FMIFMUState state);
+
+    /* Called from fmi2SerializeFMUstate().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual void SerializeFMUState(
+        FMIFMUState state,
+        FMIByte data[],
+        std::size_t size);
+
+    /* Called from fmi2DeSerializeFMUstate().
+     * Never called with FMI 1.x.
+     * Throws std::logic_error by default.
+     */
+    virtual FMIFMUState DeserializeFMUState(
+        const FMIByte data[],
+        std::size_t size);
+
     // Called from fmi2DoStep()/fmiDoStep(). Must be implemented in model code.
     virtual bool DoStep(
         FMIReal currentCommunicationPoint,
