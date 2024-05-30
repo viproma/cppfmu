@@ -3,10 +3,11 @@ from conan import ConanFile
 from conan.errors import ConanInvalidConfiguration
 from conan.tools.build import check_min_cppstd
 from conan.tools.cmake import CMake, CMakeToolchain, CMakeDeps, cmake_layout
+from conan.tools.env import VirtualRunEnv
 from conan.tools.scm import Git, Version
 from conan.tools.files import copy, load, update_conandata
 
-required_conan_version = ">=2.0"
+required_conan_version = ">=2.0.15"
 
 
 class CppFmuConan(ConanFile):
@@ -48,7 +49,7 @@ class CppFmuConan(ConanFile):
 
     def set_version(self):
         self.version = \
-            load(self, path.join(self.recipe_folder, "version.txt").strip())
+            load(self, path.join(self.recipe_folder, "version.txt")).strip()
 
     def config_options(self):
         if self.settings.os == "Windows":
@@ -92,6 +93,7 @@ class CppFmuConan(ConanFile):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
+        cmake.ctest("--output-on-failure")
 
     def package(self):
         copy(self, "LICENCE.txt", self.source_folder,
