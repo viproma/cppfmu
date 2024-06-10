@@ -1,4 +1,4 @@
-/* Copyright 2016-2019, SINTEF Ocean.
+/* Copyright 2016-2024, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -798,73 +798,111 @@ fmi2Status fmi2SetString(
 
 fmi2Status fmi2GetFMUstate(
     fmi2Component c,
-    fmi2FMUstate*)
+    fmi2FMUstate* state)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2GetFMUstate");
-    return fmi2Error;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        component->slave->GetFMUState(state);
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 fmi2Status fmi2SetFMUstate(
     fmi2Component c,
-    fmi2FMUstate)
+    fmi2FMUstate state)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2SetFMUstate");
-    return fmi2Error;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        component->slave->SetFMUState(state);
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 fmi2Status fmi2FreeFMUstate(
     fmi2Component c,
-    fmi2FMUstate*)
+    fmi2FMUstate* state)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2FreeFMUstate");
-    return fmi2Error;
+    if (state == nullptr) return fmi2OK;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        component->slave->FreeFMUState(*state);
+        *state = nullptr;
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 fmi2Status fmi2SerializedFMUstateSize(
     fmi2Component c,
-    fmi2FMUstate,
-    size_t*)
+    fmi2FMUstate state,
+    size_t* size)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2SerializedFMUstateSize");
-    return fmi2Error;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        *size = component->slave->SerializedFMUStateSize(state);
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 fmi2Status fmi2SerializeFMUstate(
     fmi2Component c,
-    fmi2FMUstate,
-    fmi2Byte[],
-    size_t)
+    fmi2FMUstate state,
+    fmi2Byte data[],
+    size_t size)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2SerializeFMUstate");
-    return fmi2Error;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        component->slave->SerializeFMUState(state, data, size);
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 fmi2Status fmi2DeSerializeFMUstate(
     fmi2Component c,
-    const fmi2Byte[],
-    size_t,
-    fmi2FMUstate*)
+    const fmi2Byte data[],
+    size_t size,
+    fmi2FMUstate* state)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
-        fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2DeSerializeFMUstate");
-    return fmi2Error;
+    const auto component = reinterpret_cast<Component*>(c);
+    try {
+        *state = component->slave->DeserializeFMUState(data, size);
+        return fmi2OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(fmi2Fatal, "", e.what());
+        return fmi2Fatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(fmi2Error, "", e.what());
+        return fmi2Error;
+    }
 }
 
 

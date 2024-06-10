@@ -43,6 +43,7 @@ namespace cppfmu
     typedef fmiInteger FMIInteger;
     typedef fmiBoolean FMIBoolean;
     typedef fmiString FMIString;
+    typedef char FMIByte; // doesn't exist in FMI 1
     typedef fmiCallbackFunctions FMICallbackFunctions;
     typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
     typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
@@ -50,6 +51,7 @@ namespace cppfmu
     typedef fmiComponent FMIComponent;
     typedef fmiComponent FMIComponentEnvironment;
     typedef fmiStatus FMIStatus;
+    typedef void* FMIFMUState; // doesn't exist in FMI 1
     typedef fmiValueReference FMIValueReference;
 
     const FMIBoolean FMIFalse = fmiFalse;
@@ -66,12 +68,14 @@ namespace cppfmu
     typedef fmi2Integer FMIInteger;
     typedef fmi2Boolean FMIBoolean;
     typedef fmi2String FMIString;
+    typedef fmi2Byte FMIByte;
     typedef fmi2CallbackFunctions FMICallbackFunctions;
     typedef fmi2CallbackAllocateMemory FMICallbackAllocateMemory;
     typedef fmi2CallbackFreeMemory FMICallbackFreeMemory;
     typedef fmi2CallbackLogger FMICallbackLogger;
     typedef fmi2Component FMIComponent;
     typedef fmi2ComponentEnvironment FMIComponentEnvironment;
+    typedef fmi2FMUstate FMIFMUState;
     typedef fmi2Status FMIStatus;
     typedef fmi2ValueReference FMIValueReference;
 
