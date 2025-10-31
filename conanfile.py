@@ -1,4 +1,4 @@
-from os import path
+from os import path, environ
 from conan import ConanFile
 from conan.errors import ConanInvalidConfiguration
 from conan.tools.build import check_min_cppstd
@@ -44,7 +44,12 @@ class CppFmuConan(ConanFile):
     def export(self):
         copy(self, "version.txt", self.recipe_folder, self.export_folder)
         git = Git(self, self.recipe_folder)
-        scm_url, scm_commit = git.get_url_and_commit()
+        if environ.get("CI") == "true":
+            scm_commit = environ.get("GITHUB_SHA")
+            scm_url = f"{environ.get('GITHUB_SERVER_URL')}/{environ.get('GITHUB_REPOSITORY')}"
+        else:
+            scm_url, scm_commit = git.get_url_and_commit()
+
         update_conandata(self, {"sources": {"commit": scm_commit, "url": scm_url}})
 
     def set_version(self):

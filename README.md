@@ -56,10 +56,9 @@ for CPPFMU that you can use in your code, but you still need to compile
 `fmi_functions.cpp`. The package can be created with `conan create . --user sintef
 --channel stable`. The recipe and some precompiled binaries are available on Sintef
 Ocean's public artifactory], which can be added with `conan remote add sintef-public
-https://artifactory.smd.sintef.no/artifactory/api/conan/conan-local`. Note that when using
-the conan recipe, FMI 1 or 2 is added as a dependency, so you do not need to fetch them
-yourself. To use CPPFMU with conan, add the following lines to your `conanfile.py` and
-`CMakeLists.txt`:
+https://package.smd.sintef.no`. Note that when using the conan recipe, FMI 1 or 2 is added
+as a dependency, so you do not need to fetch them yourself. To use CPPFMU with conan, add
+the following lines to your `conanfile.py` and `CMakeLists.txt`:
 
 `conanfile.py`:
 ```python

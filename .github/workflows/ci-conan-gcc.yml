@@ -8,38 +8,54 @@ env:
   CONAN_PASSWORD_SINTEF: ${{ secrets.CONAN_PASSWORD }}
   CONAN_LOGIN_USERNAME_SINTEF: ${{ secrets.CONAN_USER }}
   CONFIG_URL: https://github.com/sintef-ocean/conan-configs.git
+  DEBIAN_FRONTEND: noninteractive
+  TZ: Etc/UTC
 
 jobs:
   conan-with-gcc:
     name: Conan
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         build_type: [Debug, Release]
         profile: [gcc]
-        compiler_version: [10, 11, 12, 13]
+        compiler_version: [11, 12, 13, 14]
         channel: ["${{ github.ref_type == 'tag' && 'stable' || 'testing' }}"]
+        include:
+          - linux: debian:latest
+          -
+            linux: debian:trixie
+            compiler_version: 14
+          -
+            linux: ubuntu:24.04
+            compiler_version: 13
+          -
+            linux: debian:bookworm
+            compiler_version: 12
+          -
+            linux: ubuntu:22.04
+            compiler_version: 11
     container:
-      image: conanio/gcc${{ matrix.compiler_version }}-ubuntu16.04
+      image: ${{ matrix.linux }}
       options: -u 0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install prerequisites
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-          pip3 install --upgrade setuptools pip
-          pip3 install --upgrade conan~=2.0
-      - name: Configure Conan and package name
+          apt-get update
+          apt-get install -y jq pipx build-essential cmake git
+          pipx install conan
+          echo "/github/home/.local/bin" >> $GITHUB_PATH
+      - name: Conan configs
         run: |
           conan remote add sintef ${{ env.CONAN_UPLOAD }}
           echo "pkg_name=$(conan inspect -f json . | jq .name -r)" >> $GITHUB_ENV
-      - name: Conan create
-        run: |
           git config --global --add safe.directory '*'
           conan config install ${{ env.CONFIG_URL }}  --type git -sf conan2.0
           conan config install ${{ env.CONFIG_URL }}  --type git -sf profiles -tf profiles
+      - name: Conan create
+        run: |
           conan create -s build_type=${{ matrix.build_type }} \
             -s compiler.version=${{ matrix.compiler_version }} \
             -pr:b=${{ matrix.profile }} -pr:h=${{ matrix.profile }} \
