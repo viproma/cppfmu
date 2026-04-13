@@ -21,7 +21,7 @@ jobs:
         compiler_version: [192, 194]
         channel: ["${{ github.ref_type == 'tag' && 'stable' || 'testing' }}"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install prerequisites
         run: |
           pip3 install --upgrade setuptools pip
@@ -41,4 +41,4 @@ jobs:
             --user sintef --channel ${{ matrix.channel }} `
             -b missing -b outdated -b "${{ env.pkg_name }}*" .
       - name: Conan upload
-        run: conan upload --confirm -r sintef "${{ env.pkg_name }}*" --force
+        run: conan upload --confirm -r sintef "${{ env.pkg_name }}*"
