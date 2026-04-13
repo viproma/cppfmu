@@ -40,7 +40,7 @@ jobs:
       image: ${{ matrix.linux }}
       options: -u 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install prerequisites
         run: |
           apt-get update
@@ -62,4 +62,4 @@ jobs:
             --user sintef --channel ${{ matrix.channel }} \
             -b missing -b outdated -b "${{ env.pkg_name }}*" .
       - name: Conan upload
-        run: conan upload --confirm -r sintef "${{ env.pkg_name }}*" --force
+        run: conan upload --confirm -r sintef "${{ env.pkg_name }}*"
