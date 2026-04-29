@@ -20,6 +20,8 @@ extern "C"
 {
 #ifdef CPPFMU_USE_FMI_1_0
 #   include <fmiFunctions.h>
+#elif defined(CPPFMU_USE_FMI_3_0)
+#   include <fmi3Functions.h>
 #else
 #   include <fmi2Functions.h>
 #endif
@@ -63,6 +65,37 @@ namespace cppfmu
     const FMIStatus FMIError = fmiError;
     const FMIStatus FMIFatal = fmiFatal;
     const FMIStatus FMIPending = fmiPending;
+#elif defined(CPPFMU_USE_FMI_3_0)
+    typedef fmi3Float64 FMIReal;
+    typedef fmi3Float32 FMIFloat32;
+    typedef fmi3Int32 FMIInteger;
+    typedef fmi3Int8 FMIInt8;
+    typedef fmi3UInt8 FMIUInt8;
+    typedef fmi3Int16 FMIInt16;
+    typedef fmi3UInt16 FMIUInt16;
+    typedef fmi3Int64 FMIInt64;
+    typedef fmi3UInt64 FMIUInt64;
+    typedef fmi3UInt32 FMIUInt32;
+    typedef fmi3Boolean FMIBoolean;
+    typedef fmi3String FMIString;
+    typedef fmi3Byte FMIByte;
+    typedef fmi3Binary FMIBinary;
+    typedef fmi3Clock FMIClock;
+    typedef fmi3Instance FMIComponent;
+    typedef fmi3InstanceEnvironment FMIComponentEnvironment;
+    typedef fmi3FMUState FMIFMUState;
+    typedef fmi3Status FMIStatus;
+    typedef fmi3ValueReference FMIValueReference;
+    typedef fmi3DependencyKind FMIDependencyKind;
+
+    const FMIBoolean FMIFalse = fmi3False;
+    const FMIBoolean FMITrue = fmi3True;
+
+    const FMIStatus FMIOK = fmi3OK;
+    const FMIStatus FMIWarning = fmi3Warning;
+    const FMIStatus FMIDiscard = fmi3Discard;
+    const FMIStatus FMIError = fmi3Error;
+    const FMIStatus FMIFatal = fmi3Fatal;
 #else
     typedef fmi2Real FMIReal;
     typedef fmi2Integer FMIInteger;
@@ -107,6 +140,14 @@ public:
 };
 
 
+/* An alias for a std::unique_ptr specialisation where the deleter is general
+ * and independent of the type of the object pointed to.
+ */
+template<typename T>
+using UniquePtr = std::unique_ptr<T, std::function<void(void*)>>;
+
+
+#ifndef CPPFMU_USE_FMI_3_0
 // ============================================================================
 // MEMORY MANAGEMENT
 // ============================================================================
@@ -291,14 +332,6 @@ void Delete(const Memory& memory, T* obj) CPPFMU_NOEXCEPT
 }
 
 
-/* An alias for a std::unique_ptr specialisation where the deleter is general
- * and independent of the type of the object pointed to.  This is used for the
- * return type of AllocateUnique() below.
- */
-template<typename T>
-using UniquePtr = std::unique_ptr<T, std::function<void(void*)>>;
-
-
 /* Creates an object of type T which is managed by a std::unique_ptr.
  * The object is created using cppfmu::New(), and when the time comes, it is
  * destroyed using cppfmu::Delete().
@@ -402,6 +435,7 @@ private:
     const FMICallbackLogger m_fmiLogger;
     std::shared_ptr<Settings> m_settings;
 };
+#endif // CPPFMU_USE_FMI_3_0
 
 
 } // namespace cppfmu

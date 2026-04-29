@@ -14,14 +14,14 @@ class CppFmuConan(ConanFile):
     name = "cppfmu"
     license = "MPL-2.0"
     author = "Lars T. Kyllingstad"
-    description = "C++ wrapper for FMI co-simulation, v1 and v2"
+    description = "C++ wrapper for FMI co-simulation, v1, v2, and v3"
     topics = ("Co-simulation")
     url = "https://github.com/viproma/cppfmu"
     settings = "os", "compiler", "build_type", "arch"
     package_type = "static-library"
     options = {
         "fPIC": [True, False],
-        "use_fmi_version": [1, 2]
+        "use_fmi_version": [1, 2, 3]
     }
     default_options = {
         "fPIC": True,
@@ -66,6 +66,8 @@ class CppFmuConan(ConanFile):
     def requirements(self):
         if self.options.use_fmi_version == 1:
             self.requires("fmi1/1.0.1", transitive_headers=True)
+        elif self.options.use_fmi_version == 3:
+            self.requires("fmi3/3.0.2", transitive_headers=True)
         else:
             self.requires("fmi2/2.0.4", transitive_headers=True)
 
@@ -86,10 +88,8 @@ class CppFmuConan(ConanFile):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        if self.options.use_fmi_version == 1:
-            tc.variables["CPPFMU_FMI_1"] = True
-        else:
-            tc.variables["CPPFMU_FMI_1"] = False
+        tc.variables["CPPFMU_FMI_1"] = self.options.use_fmi_version == 1
+        tc.variables["CPPFMU_FMI_3"] = self.options.use_fmi_version == 3
         tc.generate()
         deps = CMakeDeps(self)
         deps.generate()
@@ -113,5 +113,9 @@ class CppFmuConan(ConanFile):
             self.output.info("Define fmi1")
             self.cpp_info.defines = ["CPPFMU_USE_FMI_1_0=1"]
             self.cpp_info.requires = ["fmi1::cosim"]
+        elif self.options.use_fmi_version == 3:
+            self.output.info("Define fmi3")
+            self.cpp_info.defines = ["CPPFMU_USE_FMI_3_0=1"]
+            self.cpp_info.requires = ["fmi3::fmi3"]
         else:
             self.cpp_info.requires = ["fmi2::fmi2"]
