@@ -148,7 +148,6 @@ fmi3Instance fmi3InstantiateCoSimulation(
 void fmi3FreeInstance(fmi3Instance instance)
 {
     if (instance == nullptr) return;
-    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     delete component;
 }
