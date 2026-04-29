@@ -276,7 +276,7 @@ int main()
         assert(rc == fmi3Error);
     }
 
-    // Test fmi3GetVariableDependencies
+    // Test fmi3GetVariableDependencies (error path, not supported)
     {
         fmi3ValueReference independents[10] = {0};
         size_t elementIndicesOfDependent[10] = {0};
@@ -286,15 +286,14 @@ int main()
             instance, 0, elementIndicesOfDependent,
             independents, elementIndicesOfIndependents,
             dependencyKinds, 10);
-        assert(rc == fmi3OK);
+        assert(rc == fmi3Error);
     }
 
-    // Test fmi3GetNumberOfVariableDependencies
+    // Test fmi3GetNumberOfVariableDependencies (error path, not supported)
     {
         size_t nDeps = 99;
         const auto rc = fmi3GetNumberOfVariableDependencies(instance, 0, &nDeps);
-        assert(rc == fmi3OK);
-        assert(nDeps == 0);
+        assert(rc == fmi3Error);
     }
 
     // Test fmi3EnterEventMode (error path)

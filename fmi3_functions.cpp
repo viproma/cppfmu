@@ -52,6 +52,12 @@ namespace
         cppfmu::UniquePtr<cppfmu::SlaveInstance3> slave;
         cppfmu::FMIReal lastSuccessfulTime;
     };
+
+    inline fmi3Status CheckInstance(fmi3Instance instance)
+    {
+        if (instance == nullptr) return fmi3Fatal;
+        return fmi3OK;
+    }
 }
 
 
@@ -75,6 +81,7 @@ fmi3Status fmi3SetDebugLogging(
     size_t nCategories,
     const fmi3String categories[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->debugLoggingEnabled = (loggingOn == fmi3True);
     component->loggedCategories.clear();
@@ -141,6 +148,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
 void fmi3FreeInstance(fmi3Instance instance)
 {
     if (instance == nullptr) return;
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     delete component;
 }
@@ -154,6 +162,7 @@ fmi3Status fmi3EnterInitializationMode(
     fmi3Boolean stopTimeDefined,
     fmi3Float64 stopTime)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->EnterInitializationMode(
@@ -175,6 +184,7 @@ fmi3Status fmi3EnterInitializationMode(
 
 fmi3Status fmi3ExitInitializationMode(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->ExitInitializationMode();
@@ -191,6 +201,7 @@ fmi3Status fmi3ExitInitializationMode(fmi3Instance instance)
 
 fmi3Status fmi3EnterEventMode(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterEventMode");
     return fmi3Error;
@@ -199,6 +210,7 @@ fmi3Status fmi3EnterEventMode(fmi3Instance instance)
 
 fmi3Status fmi3EnterStepMode(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterStepMode");
     return fmi3Error;
@@ -207,6 +219,7 @@ fmi3Status fmi3EnterStepMode(fmi3Instance instance)
 
 fmi3Status fmi3Terminate(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->Terminate();
@@ -223,6 +236,7 @@ fmi3Status fmi3Terminate(fmi3Instance instance)
 
 fmi3Status fmi3Reset(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->Reset();
@@ -249,6 +263,7 @@ fmi3Status fmi3GetFloat32(
     fmi3Float32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetFloat32(vr, nvr, value, nValues);
@@ -270,6 +285,7 @@ fmi3Status fmi3GetFloat64(
     fmi3Float64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetFloat64(vr, nvr, value, nValues);
@@ -291,6 +307,7 @@ fmi3Status fmi3GetInt8(
     fmi3Int8 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetInt8(vr, nvr, value, nValues);
@@ -312,6 +329,7 @@ fmi3Status fmi3GetUInt8(
     fmi3UInt8 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetUInt8(vr, nvr, value, nValues);
@@ -333,6 +351,7 @@ fmi3Status fmi3GetInt16(
     fmi3Int16 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetInt16(vr, nvr, value, nValues);
@@ -354,6 +373,7 @@ fmi3Status fmi3GetUInt16(
     fmi3UInt16 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetUInt16(vr, nvr, value, nValues);
@@ -375,6 +395,7 @@ fmi3Status fmi3GetInt32(
     fmi3Int32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetInt32(vr, nvr, value, nValues);
@@ -396,6 +417,7 @@ fmi3Status fmi3GetUInt32(
     fmi3UInt32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetUInt32(vr, nvr, value, nValues);
@@ -417,6 +439,7 @@ fmi3Status fmi3GetInt64(
     fmi3Int64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetInt64(vr, nvr, value, nValues);
@@ -438,6 +461,7 @@ fmi3Status fmi3GetUInt64(
     fmi3UInt64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetUInt64(vr, nvr, value, nValues);
@@ -459,6 +483,7 @@ fmi3Status fmi3GetBoolean(
     fmi3Boolean value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetBoolean(vr, nvr, value, nValues);
@@ -480,6 +505,7 @@ fmi3Status fmi3GetString(
     fmi3String value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetString(vr, nvr, value, nValues);
@@ -502,6 +528,7 @@ fmi3Status fmi3GetBinary(
     fmi3Binary value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetBinary(vr, nvr, sizes, value, nValues);
@@ -522,6 +549,7 @@ fmi3Status fmi3GetClock(
     size_t nvr,
     fmi3Clock value[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetClock(vr, nvr, value);
@@ -548,6 +576,7 @@ fmi3Status fmi3SetFloat32(
     const fmi3Float32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetFloat32(vr, nvr, value, nValues);
@@ -569,6 +598,7 @@ fmi3Status fmi3SetFloat64(
     const fmi3Float64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetFloat64(vr, nvr, value, nValues);
@@ -590,6 +620,7 @@ fmi3Status fmi3SetInt8(
     const fmi3Int8 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetInt8(vr, nvr, value, nValues);
@@ -611,6 +642,7 @@ fmi3Status fmi3SetUInt8(
     const fmi3UInt8 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetUInt8(vr, nvr, value, nValues);
@@ -632,6 +664,7 @@ fmi3Status fmi3SetInt16(
     const fmi3Int16 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetInt16(vr, nvr, value, nValues);
@@ -653,6 +686,7 @@ fmi3Status fmi3SetUInt16(
     const fmi3UInt16 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetUInt16(vr, nvr, value, nValues);
@@ -674,6 +708,7 @@ fmi3Status fmi3SetInt32(
     const fmi3Int32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetInt32(vr, nvr, value, nValues);
@@ -695,6 +730,7 @@ fmi3Status fmi3SetUInt32(
     const fmi3UInt32 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetUInt32(vr, nvr, value, nValues);
@@ -716,6 +752,7 @@ fmi3Status fmi3SetInt64(
     const fmi3Int64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetInt64(vr, nvr, value, nValues);
@@ -737,6 +774,7 @@ fmi3Status fmi3SetUInt64(
     const fmi3UInt64 value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetUInt64(vr, nvr, value, nValues);
@@ -758,6 +796,7 @@ fmi3Status fmi3SetBoolean(
     const fmi3Boolean value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetBoolean(vr, nvr, value, nValues);
@@ -779,6 +818,7 @@ fmi3Status fmi3SetString(
     const fmi3String value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetString(vr, nvr, value, nValues);
@@ -801,6 +841,7 @@ fmi3Status fmi3SetBinary(
     const fmi3Binary value[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetBinary(vr, nvr, sizes, value, nValues);
@@ -821,6 +862,7 @@ fmi3Status fmi3SetClock(
     size_t nvr,
     const fmi3Clock value[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetClock(vr, nvr, value);
@@ -844,6 +886,7 @@ fmi3Status fmi3GetFMUState(
     fmi3Instance instance,
     fmi3FMUState* state)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetFMUState(state);
@@ -862,6 +905,7 @@ fmi3Status fmi3SetFMUState(
     fmi3Instance instance,
     fmi3FMUState state)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SetFMUState(state);
@@ -881,6 +925,7 @@ fmi3Status fmi3FreeFMUState(
     fmi3FMUState* state)
 {
     if (state == nullptr || *state == nullptr) return fmi3OK;
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->FreeFMUState(*state);
@@ -901,6 +946,7 @@ fmi3Status fmi3SerializedFMUStateSize(
     fmi3FMUState state,
     size_t* size)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         *size = component->slave->SerializedFMUStateSize(state);
@@ -921,6 +967,7 @@ fmi3Status fmi3SerializeFMUState(
     fmi3Byte data[],
     size_t size)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->SerializeFMUState(state, data, size);
@@ -941,6 +988,7 @@ fmi3Status fmi3DeserializeFMUState(
     size_t size,
     fmi3FMUState* state)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         *state = component->slave->DeserializeFMUState(data, size);
@@ -971,6 +1019,7 @@ fmi3Status fmi3GetDirectionalDerivative(
     fmi3Float64 sensitivity[],
     size_t nSensitivity)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetDirectionalDerivative(
@@ -1000,6 +1049,7 @@ fmi3Status fmi3GetAdjointDerivative(
     fmi3Float64 sensitivity[],
     size_t nSensitivity)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetAdjointDerivative(
@@ -1027,6 +1077,7 @@ fmi3Status fmi3GetVariableDependencies(
     fmi3DependencyKind dependencyKinds[],
     size_t nDependencies)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetVariableDependencies(
@@ -1052,6 +1103,7 @@ fmi3Status fmi3GetNumberOfVariableDependencies(
     fmi3ValueReference valueReference,
     size_t* nDependencies)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         *nDependencies = component->slave->GetNumberOfVariableDependencies(valueReference);
@@ -1074,6 +1126,7 @@ fmi3Status fmi3GetOutputDerivatives(
     fmi3Float64 values[],
     size_t nValues)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         component->slave->GetOutputDerivatives(vr, nvr, orders, values, nValues);
@@ -1103,6 +1156,7 @@ fmi3Status fmi3DoStep(
     fmi3Boolean* earlyReturn,
     fmi3Float64* lastSuccessfulTime)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         fmi3Boolean eventNeeded = fmi3False;
@@ -1146,6 +1200,7 @@ fmi3Status fmi3GetNumberOfEventIndicators(
     fmi3Instance instance,
     size_t* nEventIndicators)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         *nEventIndicators = component->slave->GetNumberOfEventIndicators();
@@ -1164,6 +1219,7 @@ fmi3Status fmi3GetNumberOfContinuousStates(
     fmi3Instance instance,
     size_t* nContinuousStates)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     try {
         *nContinuousStates = component->slave->GetNumberOfContinuousStates();
@@ -1185,6 +1241,7 @@ fmi3Status fmi3GetNumberOfContinuousStates(
 
 fmi3Status fmi3EnterConfigurationMode(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterConfigurationMode");
     return fmi3Error;
@@ -1193,6 +1250,7 @@ fmi3Status fmi3EnterConfigurationMode(fmi3Instance instance)
 
 fmi3Status fmi3ExitConfigurationMode(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3ExitConfigurationMode");
     return fmi3Error;
@@ -1206,6 +1264,7 @@ fmi3Status fmi3ExitConfigurationMode(fmi3Instance instance)
 
 fmi3Status fmi3EvaluateDiscreteStates(fmi3Instance instance)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EvaluateDiscreteStates");
     return fmi3Error;
@@ -1221,6 +1280,7 @@ fmi3Status fmi3UpdateDiscreteStates(
     fmi3Boolean* nextEventTimeDefined,
     fmi3Float64* nextEventTime)
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3UpdateDiscreteStates");
     if (discreteStatesNeedUpdate) *discreteStatesNeedUpdate = fmi3False;
@@ -1245,6 +1305,7 @@ fmi3Status fmi3GetIntervalDecimal(
     fmi3Float64 intervals[],
     fmi3IntervalQualifier qualifiers[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetIntervalDecimal");
     for (size_t i = 0; i < nClocks; ++i) {
@@ -1263,6 +1324,7 @@ fmi3Status fmi3GetIntervalFraction(
     fmi3UInt64 resolutions[],
     fmi3IntervalQualifier qualifiers[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetIntervalFraction");
     for (size_t i = 0; i < nClocks; ++i) {
@@ -1280,6 +1342,7 @@ fmi3Status fmi3GetShiftDecimal(
     size_t nClocks,
     fmi3Float64 shifts[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetShiftDecimal");
     for (size_t i = 0; i < nClocks; ++i) {
@@ -1296,6 +1359,7 @@ fmi3Status fmi3GetShiftFraction(
     fmi3UInt64 shiftCounters[],
     fmi3UInt64 resolutions[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetShiftFraction");
     for (size_t i = 0; i < nClocks; ++i) {
@@ -1312,6 +1376,7 @@ fmi3Status fmi3SetIntervalDecimal(
     size_t nClocks,
     const fmi3Float64 intervals[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetIntervalDecimal");
     return fmi3Error;
@@ -1325,6 +1390,7 @@ fmi3Status fmi3SetIntervalFraction(
     const fmi3UInt64 intervalCounters[],
     const fmi3UInt64 resolutions[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetIntervalFraction");
     return fmi3Error;
@@ -1337,6 +1403,7 @@ fmi3Status fmi3SetShiftDecimal(
     size_t nClocks,
     const fmi3Float64 shifts[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetShiftDecimal");
     return fmi3Error;
@@ -1350,6 +1417,7 @@ fmi3Status fmi3SetShiftFraction(
     const fmi3UInt64 shiftCounters[],
     const fmi3UInt64 resolutions[])
 {
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetShiftFraction");
     return fmi3Error;
