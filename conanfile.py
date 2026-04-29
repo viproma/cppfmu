@@ -15,7 +15,7 @@ class CppFmuConan(ConanFile):
     license = "MPL-2.0"
     author = "Lars T. Kyllingstad"
     description = "C++ wrapper for FMI co-simulation, v1, v2, and v3"
-    topics = ("Co-simulation")
+    topics = ("Co-simulation",)
     url = "https://github.com/viproma/cppfmu"
     settings = "os", "compiler", "build_type", "arch"
     package_type = "static-library"

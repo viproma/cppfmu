@@ -1,4 +1,4 @@
-/* Copyright 2016-2019, SINTEF Ocean.
+/* Copyright 2016-2026, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -79,7 +79,6 @@ namespace cppfmu
     typedef fmi3Boolean FMIBoolean;
     typedef fmi3String FMIString;
     typedef fmi3Byte FMIByte;
-    typedef fmi3Byte FMIByte;
     typedef fmi3Binary FMIBinary;
     typedef fmi3Clock FMIClock;
     typedef fmi3Instance FMIComponent;
@@ -97,6 +96,7 @@ namespace cppfmu
     const FMIStatus FMIDiscard = fmi3Discard;
     const FMIStatus FMIError = fmi3Error;
     const FMIStatus FMIFatal = fmi3Fatal;
+    const FMIStatus FMIPending = fmi3Warning;
 #else
     typedef fmi2Real FMIReal;
     typedef fmi2Integer FMIInteger;
@@ -146,6 +146,79 @@ public:
  */
 template<typename T>
 using UniquePtr = std::unique_ptr<T, std::function<void(void*)>>;
+
+
+#ifdef CPPFMU_USE_FMI_3_0
+// ============================================================================
+// FMI 3.0 LOGGING
+// ============================================================================
+
+namespace detail
+{
+    template<typename Container, typename Item>
+    bool CanFind(const Container& container, const Item& item)
+    {
+        return container.end() != std::find(
+            container.begin(),
+            container.end(),
+            item);
+    }
+}
+
+
+/* A class that can be used to log messages from FMI 3.0 model code.
+ * All messages are forwarded to the simulation environment's logging callback.
+ */
+class Logger3
+{
+public:
+    struct Settings
+    {
+        Settings() = default;
+
+        bool debugLoggingEnabled = false;
+        std::vector<std::string> loggedCategories;
+    };
+
+    Logger3(
+        FMIComponentEnvironment component,
+        fmi3LogMessageCallback logMessage,
+        std::shared_ptr<Settings> settings)
+        : m_component{component}
+        , m_fmiLogger{logMessage}
+        , m_settings{settings}
+    {
+    }
+
+    void Log(
+        FMIStatus status,
+        FMIString category,
+        FMIString message) const
+    {
+        if (m_settings->loggedCategories.empty() ||
+            detail::CanFind(m_settings->loggedCategories, std::string(category))) {
+            if (m_fmiLogger) {
+                m_fmiLogger(m_component, status, category, message);
+            }
+        }
+    }
+
+    void DebugLog(
+        FMIStatus status,
+        FMIString category,
+        FMIString message) const
+    {
+        if (m_settings->debugLoggingEnabled) {
+            Log(status, category, message);
+        }
+    }
+
+private:
+    const FMIComponentEnvironment m_component;
+    fmi3LogMessageCallback m_fmiLogger;
+    std::shared_ptr<Settings> m_settings;
+};
+#endif
 
 
 #ifndef CPPFMU_USE_FMI_3_0

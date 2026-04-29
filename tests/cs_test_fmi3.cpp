@@ -217,6 +217,109 @@ int main()
         assert(nStates == 0);
     }
 
+    // Test fmi3GetVersion
+    {
+        const auto version = fmi3GetVersion();
+        assert(version != nullptr);
+        assert(version[0] == '3');
+    }
+
+    // Test fmi3SetDebugLogging
+    {
+        const char* categories[] = {"testCat"};
+        const auto rc = fmi3SetDebugLogging(instance, fmi3True, 1, categories);
+        assert(rc == fmi3OK);
+    }
+    {
+        const auto rc = fmi3SetDebugLogging(instance, fmi3False, 0, nullptr);
+        assert(rc == fmi3OK);
+    }
+
+    // Test additional Get/Set types
+    {
+        const fmi3ValueReference vr[] = {0};
+        fmi3Float32 f32 = 1.5f;
+        const auto rc = fmi3SetFloat32(instance, vr, 1, &f32, 1);
+        assert(rc == fmi3OK);
+        fmi3Float32 f32Out = 0.0f;
+        const auto rc2 = fmi3GetFloat32(instance, vr, 1, &f32Out, 1);
+        assert(rc2 == fmi3OK);
+        assert(f32Out == 1.5f);
+    }
+    {
+        const fmi3ValueReference vr[] = {0};
+        fmi3Int32 i32 = 42;
+        const auto rc = fmi3SetInt32(instance, vr, 1, &i32, 1);
+        assert(rc == fmi3OK);
+        fmi3Int32 i32Out = 0;
+        const auto rc2 = fmi3GetInt32(instance, vr, 1, &i32Out, 1);
+        assert(rc2 == fmi3OK);
+        assert(i32Out == 42);
+    }
+    {
+        const fmi3ValueReference vr[] = {0};
+        fmi3Boolean b = fmi3True;
+        const auto rc = fmi3SetBoolean(instance, vr, 1, &b, 1);
+        assert(rc == fmi3OK);
+        fmi3Boolean bOut = fmi3False;
+        const auto rc2 = fmi3GetBoolean(instance, vr, 1, &bOut, 1);
+        assert(rc2 == fmi3OK);
+        assert(bOut == fmi3True);
+    }
+
+    // Test fmi3GetAdjointDerivative (error path, not supported)
+    {
+        const fmi3ValueReference vr[] = {0};
+        fmi3Float64 seed[] = {1.0};
+        fmi3Float64 sensitivity[] = {0.0};
+        const auto rc = fmi3GetAdjointDerivative(instance, vr, 1, vr, 1, seed, 1, sensitivity, 1);
+        assert(rc == fmi3Error);
+    }
+
+    // Test fmi3GetVariableDependencies
+    {
+        fmi3ValueReference independents[10] = {0};
+        size_t elementIndicesOfDependent[10] = {0};
+        size_t elementIndicesOfIndependents[10] = {0};
+        fmi3DependencyKind dependencyKinds[10] = {};
+        const auto rc = fmi3GetVariableDependencies(
+            instance, 0, elementIndicesOfDependent,
+            independents, elementIndicesOfIndependents,
+            dependencyKinds, 10);
+        assert(rc == fmi3OK);
+    }
+
+    // Test fmi3GetNumberOfVariableDependencies
+    {
+        size_t nDeps = 99;
+        const auto rc = fmi3GetNumberOfVariableDependencies(instance, 0, &nDeps);
+        assert(rc == fmi3OK);
+        assert(nDeps == 0);
+    }
+
+    // Test fmi3EnterEventMode (error path)
+    {
+        const auto rc = fmi3EnterEventMode(instance);
+        assert(rc == fmi3Error);
+    }
+
+    // Test fmi3EnterStepMode (error path)
+    {
+        const auto rc = fmi3EnterStepMode(instance);
+        assert(rc == fmi3Error);
+    }
+
+    // Test fmi3FreeInstance with null (should not crash)
+    {
+        fmi3FreeInstance(nullptr);
+    }
+
+    // Test fmi3Reset
+    {
+        const auto rc = fmi3Reset(instance);
+        assert(rc == fmi3OK);
+    }
+
     // Termination (FMI 3.0)
     const auto terminateResult = fmi3Terminate(instance);
     assert(terminateResult == fmi3OK);

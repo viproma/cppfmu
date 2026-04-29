@@ -6,6 +6,7 @@
 #include <exception>
 #include <functional>
 #include <limits>
+#include <memory>
 
 #include "cppfmu_cs_fmi3.hpp"
 
@@ -25,9 +26,19 @@ namespace
         {
         }
 
+        bool IsCategoryLogged(const std::string& category) const
+        {
+            if (loggedCategories.empty()) return true;
+            for (const auto& c : loggedCategories) {
+                if (c == category) return true;
+            }
+            return false;
+        }
+
         void Log(fmi3Status status, cppfmu::FMIString category, cppfmu::FMIString message) const
         {
-            if (status == fmi3Fatal || status == fmi3Error || debugLoggingEnabled) {
+            if ((status == fmi3Fatal || status == fmi3Error || debugLoggingEnabled) &&
+                IsCategoryLogged(category)) {
                 if (logMessage) {
                     logMessage(instanceEnvironment, status, category, message);
                 }
@@ -37,21 +48,10 @@ namespace
         cppfmu::FMIComponentEnvironment instanceEnvironment;
         fmi3LogMessageCallback logMessage;
         bool debugLoggingEnabled;
+        std::vector<std::string> loggedCategories;
         cppfmu::UniquePtr<cppfmu::SlaveInstance3> slave;
         cppfmu::FMIReal lastSuccessfulTime;
     };
-
-    cppfmu::FMIStatus toCppfmuStatus(fmi3Status s)
-    {
-        switch (s) {
-            case fmi3OK:      return cppfmu::FMIOK;
-            case fmi3Warning: return cppfmu::FMIWarning;
-            case fmi3Discard: return cppfmu::FMIDiscard;
-            case fmi3Error:   return cppfmu::FMIError;
-            case fmi3Fatal:   return cppfmu::FMIFatal;
-            default:          return cppfmu::FMIError;
-        }
-    }
 }
 
 
@@ -75,10 +75,12 @@ fmi3Status fmi3SetDebugLogging(
     size_t nCategories,
     const fmi3String categories[])
 {
-    (void) nCategories;
-    (void) categories;
     auto component = reinterpret_cast<Component*>(instance);
     component->debugLoggingEnabled = (loggingOn == fmi3True);
+    component->loggedCategories.clear();
+    for (size_t i = 0; i < nCategories; ++i) {
+        component->loggedCategories.emplace_back(categories[i]);
+    }
     return fmi3OK;
 }
 
@@ -98,12 +100,13 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3IntermediateUpdateCallback intermediateUpdate)
 {
     (void) intermediateUpdate;
+    std::unique_ptr<Component> component;
     try {
-        auto component = new Component(
-            instanceEnvironment, logMessage, loggingOn);
+        component.reset(new Component(
+            instanceEnvironment, logMessage, loggingOn));
 
-        auto loggerFn = [component](cppfmu::FMIStatus status, cppfmu::FMIString category, cppfmu::FMIString message) {
-            component->Log(toCppfmuStatus(status), category, message);
+        auto loggerFn = [component.get()](cppfmu::FMIStatus status, cppfmu::FMIString category, cppfmu::FMIString message) {
+            component->Log(status, category, message);
         };
 
         component->slave = CppfmuInstantiateSlave(
@@ -119,7 +122,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
             instanceEnvironment,
             loggerFn);
 
-        return component;
+        return component.release();
     } catch (const cppfmu::FatalError& e) {
         if (logMessage) {
             logMessage(instanceEnvironment, fmi3Fatal, "cppfmu", e.what());
@@ -136,6 +139,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
 
 void fmi3FreeInstance(fmi3Instance instance)
 {
+    if (instance == nullptr) return;
     auto component = reinterpret_cast<Component*>(instance);
     delete component;
 }
@@ -1170,6 +1174,184 @@ fmi3Status fmi3GetNumberOfContinuousStates(
         component->Log(fmi3Error, "cppfmu", e.what());
         return fmi3Error;
     }
+}
+
+
+// ============================================================================
+// Configuration mode stubs
+// ============================================================================
+
+
+fmi3Status fmi3EnterConfigurationMode(fmi3Instance instance)
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterConfigurationMode");
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3ExitConfigurationMode(fmi3Instance instance)
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3ExitConfigurationMode");
+    return fmi3Error;
+}
+
+
+// ============================================================================
+// Discrete states stubs
+// ============================================================================
+
+
+fmi3Status fmi3EvaluateDiscreteStates(fmi3Instance instance)
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EvaluateDiscreteStates");
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3UpdateDiscreteStates(
+    fmi3Instance instance,
+    fmi3Boolean* discreteStatesNeedUpdate,
+    fmi3Boolean* terminateSimulation,
+    fmi3Boolean* nominalsOfContinuousStatesChanged,
+    fmi3Boolean* valuesOfContinuousStatesChanged,
+    fmi3Boolean* nextEventTimeDefined,
+    fmi3Float64* nextEventTime)
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3UpdateDiscreteStates");
+    if (discreteStatesNeedUpdate) *discreteStatesNeedUpdate = fmi3False;
+    if (terminateSimulation) *terminateSimulation = fmi3False;
+    if (nominalsOfContinuousStatesChanged) *nominalsOfContinuousStatesChanged = fmi3False;
+    if (valuesOfContinuousStatesChanged) *valuesOfContinuousStatesChanged = fmi3False;
+    if (nextEventTimeDefined) *nextEventTimeDefined = fmi3False;
+    if (nextEventTime) *nextEventTime = 0.0;
+    return fmi3Error;
+}
+
+
+// ============================================================================
+// Clock interval/shift stubs
+// ============================================================================
+
+
+fmi3Status fmi3GetIntervalDecimal(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    fmi3Float64 intervals[],
+    fmi3IntervalQualifier qualifiers[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetIntervalDecimal");
+    for (size_t i = 0; i < nClocks; ++i) {
+        if (intervals) intervals[i] = 0.0;
+        if (qualifiers) qualifiers[i] = fmi3IntervalUnchanged;
+    }
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3GetIntervalFraction(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    fmi3UInt64 intervalCounters[],
+    fmi3UInt64 resolutions[],
+    fmi3IntervalQualifier qualifiers[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetIntervalFraction");
+    for (size_t i = 0; i < nClocks; ++i) {
+        if (intervalCounters) intervalCounters[i] = 0;
+        if (resolutions) resolutions[i] = 1;
+        if (qualifiers) qualifiers[i] = fmi3IntervalUnchanged;
+    }
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3GetShiftDecimal(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    fmi3Float64 shifts[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetShiftDecimal");
+    for (size_t i = 0; i < nClocks; ++i) {
+        if (shifts) shifts[i] = 0.0;
+    }
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3GetShiftFraction(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    fmi3UInt64 shiftCounters[],
+    fmi3UInt64 resolutions[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3GetShiftFraction");
+    for (size_t i = 0; i < nClocks; ++i) {
+        if (shiftCounters) shiftCounters[i] = 0;
+        if (resolutions) resolutions[i] = 1;
+    }
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3SetIntervalDecimal(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    const fmi3Float64 intervals[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetIntervalDecimal");
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3SetIntervalFraction(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    const fmi3UInt64 intervalCounters[],
+    const fmi3UInt64 resolutions[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetIntervalFraction");
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3SetShiftDecimal(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    const fmi3Float64 shifts[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetShiftDecimal");
+    return fmi3Error;
+}
+
+
+fmi3Status fmi3SetShiftFraction(
+    fmi3Instance instance,
+    const fmi3ValueReference clocks[],
+    size_t nClocks,
+    const fmi3UInt64 shiftCounters[],
+    const fmi3UInt64 resolutions[])
+{
+    auto component = reinterpret_cast<Component*>(instance);
+    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3SetShiftFraction");
+    return fmi3Error;
 }
 
 
