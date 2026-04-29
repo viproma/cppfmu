@@ -105,8 +105,9 @@ fmi3Instance fmi3InstantiateCoSimulation(
         component.reset(new Component(
             instanceEnvironment, logMessage, loggingOn));
 
-        auto loggerFn = [component.get()](cppfmu::FMIStatus status, cppfmu::FMIString category, cppfmu::FMIString message) {
-            component->Log(status, category, message);
+        auto* comp = component.get();
+        auto loggerFn = [comp](cppfmu::FMIStatus status, cppfmu::FMIString category, cppfmu::FMIString message) {
+            comp->Log(status, category, message);
         };
 
         component->slave = CppfmuInstantiateSlave(
