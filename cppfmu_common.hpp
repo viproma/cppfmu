@@ -79,6 +79,7 @@ namespace cppfmu
     typedef fmi3Boolean FMIBoolean;
     typedef fmi3String FMIString;
     typedef fmi3Byte FMIByte;
+    typedef fmi3Byte FMIByte;
     typedef fmi3Binary FMIBinary;
     typedef fmi3Clock FMIClock;
     typedef fmi3Instance FMIComponent;

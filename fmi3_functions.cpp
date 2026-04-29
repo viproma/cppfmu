@@ -6,7 +6,6 @@
 #include <exception>
 #include <functional>
 #include <limits>
-#include <string>
 
 #include "cppfmu_cs_fmi3.hpp"
 
@@ -16,12 +15,10 @@ namespace
     struct Component
     {
         Component(
-            cppfmu::FMIString instanceName,
             cppfmu::FMIComponentEnvironment instanceEnvironment,
             fmi3LogMessageCallback logMessage,
             cppfmu::FMIBoolean loggingOn)
-            : instanceName{instanceName ? instanceName : ""}
-            , instanceEnvironment{instanceEnvironment}
+            : instanceEnvironment{instanceEnvironment}
             , logMessage{logMessage}
             , debugLoggingEnabled{loggingOn == fmi3True}
             , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
@@ -30,12 +27,13 @@ namespace
 
         void Log(fmi3Status status, cppfmu::FMIString category, cppfmu::FMIString message) const
         {
-            if (logMessage) {
-                logMessage(instanceEnvironment, status, category, message);
+            if (status == fmi3Fatal || status == fmi3Error || debugLoggingEnabled) {
+                if (logMessage) {
+                    logMessage(instanceEnvironment, status, category, message);
+                }
             }
         }
 
-        std::string instanceName;
         cppfmu::FMIComponentEnvironment instanceEnvironment;
         fmi3LogMessageCallback logMessage;
         bool debugLoggingEnabled;
@@ -102,7 +100,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
     (void) intermediateUpdate;
     try {
         auto component = new Component(
-            instanceName, instanceEnvironment, logMessage, loggingOn);
+            instanceEnvironment, logMessage, loggingOn);
 
         auto loggerFn = [component](cppfmu::FMIStatus status, cppfmu::FMIString category, cppfmu::FMIString message) {
             component->Log(toCppfmuStatus(status), category, message);
@@ -1143,9 +1141,17 @@ fmi3Status fmi3GetNumberOfEventIndicators(
     fmi3Instance instance,
     size_t* nEventIndicators)
 {
-    (void) instance;
-    *nEventIndicators = 0;
-    return fmi3OK;
+    auto component = reinterpret_cast<Component*>(instance);
+    try {
+        *nEventIndicators = component->slave->GetNumberOfEventIndicators();
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
 }
 
 
@@ -1153,9 +1159,17 @@ fmi3Status fmi3GetNumberOfContinuousStates(
     fmi3Instance instance,
     size_t* nContinuousStates)
 {
-    (void) instance;
-    *nContinuousStates = 0;
-    return fmi3OK;
+    auto component = reinterpret_cast<Component*>(instance);
+    try {
+        *nContinuousStates = component->slave->GetNumberOfContinuousStates();
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
 }
 
 

@@ -480,6 +480,18 @@ std::size_t SlaveInstance3::GetNumberOfVariableDependencies(
 }
 
 
+std::size_t SlaveInstance3::GetNumberOfEventIndicators() const
+{
+    return 0;
+}
+
+
+std::size_t SlaveInstance3::GetNumberOfContinuousStates() const
+{
+    return 0;
+}
+
+
 SlaveInstance3::~SlaveInstance3() CPPFMU_NOEXCEPT
 {
     // Do nothing

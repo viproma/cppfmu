@@ -43,23 +43,21 @@ else()
     install(FILES ${CMAKE_SOURCE_DIR}/fmi_functions.cpp DESTINATION ${CMAKE_INSTALL_PREFIX}/src)
 endif()
 
-if(NOT CPPFMU_FMI_1 AND NOT CPPFMU_FMI_3)
-    add_executable(cs_test
-        "tests/cs_test.cpp"
-        "tests/cs_slave.cpp"
-        "fmi_functions.cpp"
-    )
+if(NOT CPPFMU_FMI_1)
+    if(CPPFMU_FMI_3)
+        add_executable(cs_test
+            "tests/cs_test_fmi3.cpp"
+            "tests/cs_slave_fmi3.cpp"
+            "fmi3_functions.cpp"
+        )
+    else()
+        add_executable(cs_test
+            "tests/cs_test.cpp"
+            "tests/cs_slave.cpp"
+            "fmi_functions.cpp"
+        )
+    endif()
     target_compile_features(cs_test PRIVATE cxx_std_11)
     target_link_libraries(cs_test PRIVATE cppfmu)
     add_test(NAME "cs_test" COMMAND cs_test)
-else()
-    add_executable(cs_test_fmi1
-        "tests/cs_test.cpp"
-        "tests/cs_slave.cpp"
-        "fmi_functions.cpp"
-    )
-    target_compile_features(cs_test_fmi1 PRIVATE cxx_std_11)
-    target_link_libraries(cs_test_fmi1 PRIVATE cppfmu)
-    target_compile_definitions(cs_test_fmi1 PRIVATE CPPFMU_USE_FMI_1_0 "MODEL_IDENTIFIER=")
-    add_test(NAME "cs_test_fmi1" COMMAND cs_test_fmi1)
 endif()

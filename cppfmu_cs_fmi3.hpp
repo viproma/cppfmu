@@ -398,6 +398,16 @@ public:
     virtual std::size_t GetNumberOfVariableDependencies(
         FMIValueReference valueReference) const;
 
+    /* Called from fmi3GetNumberOfEventIndicators().
+     * Returns 0 by default.
+     */
+    virtual std::size_t GetNumberOfEventIndicators() const;
+
+    /* Called from fmi3GetNumberOfContinuousStates().
+     * Returns 0 by default.
+     */
+    virtual std::size_t GetNumberOfContinuousStates() const;
+
     // Called from fmi3DoStep(). Must be implemented in model code.
     // Returns true for OK, false for discard (early return).
     // Output parameters are set by the implementation.
