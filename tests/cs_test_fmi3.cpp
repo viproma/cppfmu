@@ -336,16 +336,36 @@ int main()
         assert(rc == fmi3Error);
     }
 
-    // Test fmi3EnterEventMode (error path)
+    // Test Event Mode lifecycle (success path — default implementations)
     {
         const auto rc = fmi3EnterEventMode(instance);
-        assert(rc == fmi3Error);
+        assert(rc == fmi3OK);
     }
-
-    // Test fmi3EnterStepMode (error path)
+    {
+        const auto rc = fmi3EvaluateDiscreteStates(instance);
+        assert(rc == fmi3OK);
+    }
+    {
+        fmi3Boolean needUpdate = fmi3True;
+        fmi3Boolean termSim = fmi3True;
+        fmi3Boolean nominalsChanged = fmi3True;
+        fmi3Boolean valuesChanged = fmi3True;
+        fmi3Boolean timeDefined = fmi3True;
+        fmi3Float64 time = 99.0;
+        const auto rc = fmi3UpdateDiscreteStates(
+            instance, &needUpdate, &termSim, &nominalsChanged,
+            &valuesChanged, &timeDefined, &time);
+        assert(rc == fmi3OK);
+        assert(needUpdate == fmi3False);
+        assert(termSim == fmi3False);
+        assert(nominalsChanged == fmi3False);
+        assert(valuesChanged == fmi3False);
+        assert(timeDefined == fmi3False);
+        assert(time == 0.0);
+    }
     {
         const auto rc = fmi3EnterStepMode(instance);
-        assert(rc == fmi3Error);
+        assert(rc == fmi3OK);
     }
 
     // Test fmi3FreeInstance with null (should not crash)

@@ -45,6 +45,41 @@ void SlaveInstance3::Reset()
 }
 
 
+void SlaveInstance3::EnterEventMode()
+{
+    // Do nothing
+}
+
+
+void SlaveInstance3::EvaluateDiscreteStates()
+{
+    // Do nothing
+}
+
+
+void SlaveInstance3::UpdateDiscreteStates(
+    FMIBoolean& discreteStatesNeedUpdate,
+    FMIBoolean& terminateSimulation,
+    FMIBoolean& nominalsOfContinuousStatesChanged,
+    FMIBoolean& valuesOfContinuousStatesChanged,
+    FMIBoolean& nextEventTimeDefined,
+    FMIReal& nextEventTime)
+{
+    discreteStatesNeedUpdate = FMIFalse;
+    terminateSimulation = FMIFalse;
+    nominalsOfContinuousStatesChanged = FMIFalse;
+    valuesOfContinuousStatesChanged = FMIFalse;
+    nextEventTimeDefined = FMIFalse;
+    nextEventTime = 0.0;
+}
+
+
+void SlaveInstance3::EnterStepMode()
+{
+    // Do nothing
+}
+
+
 void SlaveInstance3::SetFloat32(
     const FMIValueReference /*vr*/[],
     std::size_t nvr,

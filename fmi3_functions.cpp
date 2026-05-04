@@ -202,8 +202,73 @@ fmi3Status fmi3EnterEventMode(fmi3Instance instance)
 {
     if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
-    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterEventMode");
-    return fmi3Error;
+    try {
+        component->slave->EnterEventMode();
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
+}
+
+
+fmi3Status fmi3EvaluateDiscreteStates(fmi3Instance instance)
+{
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
+    auto component = reinterpret_cast<Component*>(instance);
+    try {
+        component->slave->EvaluateDiscreteStates();
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
+}
+
+
+fmi3Status fmi3UpdateDiscreteStates(
+    fmi3Instance instance,
+    fmi3Boolean* discreteStatesNeedUpdate,
+    fmi3Boolean* terminateSimulation,
+    fmi3Boolean* nominalsOfContinuousStatesChanged,
+    fmi3Boolean* valuesOfContinuousStatesChanged,
+    fmi3Boolean* nextEventTimeDefined,
+    fmi3Float64* nextEventTime)
+{
+    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
+    auto component = reinterpret_cast<Component*>(instance);
+    try {
+        fmi3Boolean needUpdate = fmi3False;
+        fmi3Boolean termSim = fmi3False;
+        fmi3Boolean nominalsChanged = fmi3False;
+        fmi3Boolean valuesChanged = fmi3False;
+        fmi3Boolean timeDefined = fmi3False;
+        fmi3Float64 time = 0.0;
+
+        component->slave->UpdateDiscreteStates(
+            needUpdate, termSim, nominalsChanged, valuesChanged, timeDefined, time);
+
+        if (discreteStatesNeedUpdate) *discreteStatesNeedUpdate = needUpdate;
+        if (terminateSimulation) *terminateSimulation = termSim;
+        if (nominalsOfContinuousStatesChanged) *nominalsOfContinuousStatesChanged = nominalsChanged;
+        if (valuesOfContinuousStatesChanged) *valuesOfContinuousStatesChanged = valuesChanged;
+        if (nextEventTimeDefined) *nextEventTimeDefined = timeDefined;
+        if (nextEventTime) *nextEventTime = time;
+
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
 }
 
 
@@ -211,8 +276,16 @@ fmi3Status fmi3EnterStepMode(fmi3Instance instance)
 {
     if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
-    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EnterStepMode");
-    return fmi3Error;
+    try {
+        component->slave->EnterStepMode();
+        return fmi3OK;
+    } catch (const cppfmu::FatalError& e) {
+        component->Log(fmi3Fatal, "cppfmu", e.what());
+        return fmi3Fatal;
+    } catch (const std::exception& e) {
+        component->Log(fmi3Error, "cppfmu", e.what());
+        return fmi3Error;
+    }
 }
 
 
@@ -1252,42 +1325,6 @@ fmi3Status fmi3ExitConfigurationMode(fmi3Instance instance)
     if (auto status = CheckInstance(instance); status != fmi3OK) return status;
     auto component = reinterpret_cast<Component*>(instance);
     component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3ExitConfigurationMode");
-    return fmi3Error;
-}
-
-
-// ============================================================================
-// Discrete states stubs
-// ============================================================================
-
-
-fmi3Status fmi3EvaluateDiscreteStates(fmi3Instance instance)
-{
-    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
-    auto component = reinterpret_cast<Component*>(instance);
-    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3EvaluateDiscreteStates");
-    return fmi3Error;
-}
-
-
-fmi3Status fmi3UpdateDiscreteStates(
-    fmi3Instance instance,
-    fmi3Boolean* discreteStatesNeedUpdate,
-    fmi3Boolean* terminateSimulation,
-    fmi3Boolean* nominalsOfContinuousStatesChanged,
-    fmi3Boolean* valuesOfContinuousStatesChanged,
-    fmi3Boolean* nextEventTimeDefined,
-    fmi3Float64* nextEventTime)
-{
-    if (auto status = CheckInstance(instance); status != fmi3OK) return status;
-    auto component = reinterpret_cast<Component*>(instance);
-    component->Log(fmi3Error, "cppfmu", "FMI function not supported: fmi3UpdateDiscreteStates");
-    if (discreteStatesNeedUpdate) *discreteStatesNeedUpdate = fmi3False;
-    if (terminateSimulation) *terminateSimulation = fmi3False;
-    if (nominalsOfContinuousStatesChanged) *nominalsOfContinuousStatesChanged = fmi3False;
-    if (valuesOfContinuousStatesChanged) *valuesOfContinuousStatesChanged = fmi3False;
-    if (nextEventTimeDefined) *nextEventTimeDefined = fmi3False;
-    if (nextEventTime) *nextEventTime = 0.0;
     return fmi3Error;
 }
 

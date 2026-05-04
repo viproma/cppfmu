@@ -58,6 +58,32 @@ public:
      */
     virtual void Reset();
 
+    /* Called from fmi3EnterEventMode().
+     * Does nothing by default.
+     */
+    virtual void EnterEventMode();
+
+    /* Called from fmi3EvaluateDiscreteStates().
+     * Does nothing by default.
+     */
+    virtual void EvaluateDiscreteStates();
+
+    /* Called from fmi3UpdateDiscreteStates().
+     * Sets all output flags to "no events" by default.
+     */
+    virtual void UpdateDiscreteStates(
+        FMIBoolean& discreteStatesNeedUpdate,
+        FMIBoolean& terminateSimulation,
+        FMIBoolean& nominalsOfContinuousStatesChanged,
+        FMIBoolean& valuesOfContinuousStatesChanged,
+        FMIBoolean& nextEventTimeDefined,
+        FMIReal& nextEventTime);
+
+    /* Called from fmi3EnterStepMode().
+     * Does nothing by default.
+     */
+    virtual void EnterStepMode();
+
     /* Called from fmi3SetFloat32().
      * Throws std::logic_error by default.
      */
