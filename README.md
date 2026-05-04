@@ -27,27 +27,32 @@ Supported FMI Versions
 | FMI 2.0 | Stable | `cppfmu_cs.hpp` | `cppfmu_cs.cpp` | `fmi_functions.cpp` |
 | FMI 3.0 | Partial | `cppfmu_cs_fmi3.hpp` | `cppfmu_cs_fmi3.cpp` | `fmi3_functions.cpp` |
 
-### FMI 3.0 Partial Support
+### FMI 3.0 Support Status
 
-FMI 3.0 co-simulation is supported with the following caveats:
+FMI 3.0 co-simulation is supported. The `SlaveInstance3` class provides virtual
+methods for all Co-Simulation API functions. Functions without a corresponding
+virtual method are hardcoded stubs that always return `fmi3Error`.
 
-**Fully implemented:**
-- All Get/Set type functions (Float32, Float64, Int8–64, UInt8–64, Boolean, String)
-- Directional derivatives and output derivatives
+**Fully implemented (virtual methods on `SlaveInstance3`):**
+- All Get/Set type functions (Float32, Float64, Int8–64, UInt8–64, Boolean, String, Binary)
+- Directional derivatives, adjoint derivatives, and output derivatives
+- Variable dependencies and number of dependencies
 - FMU state management (get/set/serialize/deserialize)
 - Enhanced `DoStep` with early return, event handling, and termination output parameters
+- Event Mode (`EnterEventMode`, `EvaluateDiscreteStates`, `UpdateDiscreteStates`, `EnterStepMode`)
 - `GetNumberOfEventIndicators` / `GetNumberOfContinuousStates`
 - Debug logging with categories
 
-**Stub implementations (return "not supported" error):**
-- **Event Mode** — `fmi3EnterEventMode`, `fmi3UpdateDiscreteStates`
-- **Step Mode** — `fmi3EnterStepMode`
+**Genuine stubs (no virtual method — cannot be overridden by users):**
 - **Configuration Mode** — `fmi3EnterConfigurationMode` / `fmi3ExitConfigurationMode`
-- **Clocks** — `GetClock`, `SetClock`, interval/shift functions
-- **Adjoint derivatives** — `fmi3GetAdjointDerivative`
-- **Variable dependencies** — `fmi3GetVariableDependencies`, `fmi3GetNumberOfVariableDependencies`
-- **Binary type** — `fmi3GetBinary`, `fmi3SetBinary`
-- **Intermediate Update Callback** — parameter accepted but ignored
+  (optional feature for structural parameter tuning)
+- **Clock interval/shift** — `Get/SetIntervalDecimal/Fraction`, `Get/SetShiftDecimal/Fraction`
+  (optional feature for variable-interval and shifted clocks)
+- **Intermediate Update Callback** — parameter accepted during instantiation but ignored
+
+**Note:** `GetClock` and `SetClock` have virtual methods on `SlaveInstance3` and can be
+overridden by users; the default implementation throws `std::logic_error` for non-zero
+variable references, consistent with other type-specific Get/Set methods.
 
 ### Why `SlaveInstance3` Instead of Extending `SlaveInstance`?
 
