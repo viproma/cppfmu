@@ -267,6 +267,46 @@ int main()
         assert(bOut == fmi3True);
     }
 
+    // Test fmi3GetBinary / fmi3SetBinary (vr=3)
+    {
+        const fmi3ValueReference vr[] = {3};
+        const fmi3Byte inputData[] = {0xDE, 0xAD, 0xBE, 0xEF};
+        const fmi3Byte* values[] = {inputData};
+        size_t sizes[] = {sizeof(inputData)};
+        const auto rc = fmi3SetBinary(instance, vr, 1, sizes, values, 1);
+        assert(rc == fmi3OK);
+    }
+    {
+        const fmi3ValueReference vr[] = {3};
+        size_t sizes[] = {0};
+        // First call with nullptr value to get size
+        const auto rc = fmi3GetBinary(instance, vr, 1, sizes, nullptr, 1);
+        assert(rc == fmi3OK);
+        assert(sizes[0] == 4);
+    }
+    {
+        const fmi3ValueReference vr[] = {3};
+        fmi3Byte outputData[4] = {0};
+        const fmi3Byte* values[] = {outputData};
+        size_t sizes[] = {0};
+        const auto rc = fmi3GetBinary(instance, vr, 1, sizes, values, 1);
+        assert(rc == fmi3OK);
+        assert(sizes[0] == 4);
+        assert(outputData[0] == 0xDE);
+        assert(outputData[1] == 0xAD);
+        assert(outputData[2] == 0xBE);
+        assert(outputData[3] == 0xEF);
+    }
+    {
+        // Invalid value reference for Binary should return error
+        const fmi3ValueReference vr[] = {0};
+        const fmi3Byte data[] = {0x00};
+        const fmi3Byte* values[] = {data};
+        size_t sizes[] = {1};
+        const auto rc = fmi3SetBinary(instance, vr, 1, sizes, values, 1);
+        assert(rc == fmi3Error);
+    }
+
     // Test fmi3GetAdjointDerivative (error path, not supported)
     {
         const fmi3ValueReference vr[] = {0};

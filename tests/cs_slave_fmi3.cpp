@@ -142,10 +142,46 @@ public:
         return true;
     }
 
+    void SetBinary(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        const std::size_t sizes[],
+        const cppfmu::FMIBinary value[],
+        std::size_t /*nValues*/) override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 3) {
+                binaryData_.assign(value[i], value[i] + sizes[i]);
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void GetBinary(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        std::size_t sizes[],
+        cppfmu::FMIBinary value[],
+        std::size_t /*nValues*/) const override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 3) {
+                sizes[i] = binaryData_.size();
+                if (value != nullptr && value[i] != nullptr) {
+                    std::memcpy(const_cast<cppfmu::FMIByte*>(value[i]), binaryData_.data(), binaryData_.size());
+                }
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
 private:
     cppfmu::FMIReal value_ = 0.0;
     bool derivativeSupported_ = false;
     cppfmu::FMIReal seed_ = 1.0;
+    std::vector<cppfmu::FMIByte> binaryData_;
 };
 
 
