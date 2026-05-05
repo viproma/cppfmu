@@ -96,7 +96,9 @@ namespace cppfmu
     const FMIStatus FMIDiscard = fmi3Discard;
     const FMIStatus FMIError = fmi3Error;
     const FMIStatus FMIFatal = fmi3Fatal;
-    const FMIStatus FMIPending = fmi3Warning;
+    // FMI 3.0 has no native "pending" status. Keep FMIPending as a distinct
+    // sentinel value so generic code can still distinguish it from warnings.
+    const FMIStatus FMIPending = static_cast<FMIStatus>(-1);
 #else
     typedef fmi2Real FMIReal;
     typedef fmi2Integer FMIInteger;

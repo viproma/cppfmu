@@ -8,6 +8,36 @@
 class TestSlave3 : public cppfmu::SlaveInstance3
 {
 public:
+    void SetFloat32(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        const cppfmu::FMIFloat32 value[],
+        std::size_t /*nValues*/) override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                float32Value_ = value[i];
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void GetFloat32(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        cppfmu::FMIFloat32 value[],
+        std::size_t /*nValues*/) const override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                value[i] = float32Value_;
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
     void SetFloat64(
         const cppfmu::FMIValueReference vr[],
         std::size_t nvr,
@@ -40,6 +70,66 @@ public:
                 value[i] = derivativeSupported_ ? 1.0 : 0.0;
             } else if (vr[i] == 2) {
                 value[i] = seed_;
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void SetInt32(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        const cppfmu::FMIInteger value[],
+        std::size_t /*nValues*/) override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                int32Value_ = value[i];
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void GetInt32(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        cppfmu::FMIInteger value[],
+        std::size_t /*nValues*/) const override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                value[i] = int32Value_;
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void SetBoolean(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        const cppfmu::FMIBoolean value[],
+        std::size_t /*nValues*/) override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                boolValue_ = value[i];
+            } else {
+                throw std::logic_error("Invalid value reference");
+            }
+        }
+    }
+
+    void GetBoolean(
+        const cppfmu::FMIValueReference vr[],
+        std::size_t nvr,
+        cppfmu::FMIBoolean value[],
+        std::size_t /*nValues*/) const override
+    {
+        for (std::size_t i = 0; i < nvr; ++i) {
+            if (vr[i] == 0) {
+                value[i] = boolValue_;
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -179,6 +269,9 @@ public:
 
 private:
     cppfmu::FMIReal value_ = 0.0;
+    cppfmu::FMIFloat32 float32Value_ = 0.0f;
+    cppfmu::FMIInteger int32Value_ = 0;
+    cppfmu::FMIBoolean boolValue_ = cppfmu::FMIFalse;
     bool derivativeSupported_ = false;
     cppfmu::FMIReal seed_ = 1.0;
     std::vector<cppfmu::FMIByte> binaryData_;

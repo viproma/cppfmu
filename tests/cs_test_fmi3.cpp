@@ -195,7 +195,7 @@ int main()
         assert(val == value1);
     }
     {
-        const fmi3ValueReference invalidVr = 1;
+        const fmi3ValueReference invalidVr = 999;
         fmi3Float64 val = -1.0;
         const auto rc = fmi3GetFloat64(instance, &invalidVr, 1, &val, 1);
         assert(rc == fmi3Error);

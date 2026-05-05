@@ -125,13 +125,13 @@ binaries are available on Sintef Ocean's public artifactory, which can be added 
 `conan remote add sintef-public https://gitlab.sintef.no/api/v4/projects/22218/packages/conan`.
 Note that when using the conan recipe, FMI 1, 2, or 3 is added as a dependency, so you
 do not need to fetch them yourself. To use CPPFMU with conan, add the following lines
-to your `conanfile.py` and `CMakeLists.txt`:
+to your `conanfile.py` and `CMakeLists.txt`, showing how to do it with FMI 3:
 
 `conanfile.py`:
 ```python
   ...
   def requirements(self):
-      self.requires("cppfmu/1.0@sintef/stable")
+      self.requires("cppfmu/1.0@sintef/stable", options={"use_fmi_version": 3})
 
   def generate(self):
       # Copy fmi_function.cpp to your binary directory
@@ -139,7 +139,7 @@ to your `conanfile.py` and `CMakeLists.txt`:
           if require.build or require.test:
               continue
       if dep.ref.name == "cppfmu":
-          copy(self, "fmi_functions.cpp",
+          copy(self, "fmi3_functions.cpp", # or "fmi_function.cpp" for FMI 1 or 2
               dep.cpp_info.srcdirs[0],
               path.join(self.build_folder, dep.ref.name),
               keep_path=False)
