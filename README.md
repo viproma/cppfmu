@@ -18,6 +18,72 @@ CPPFMU was developed as part of the R&D project [Virtual Prototyping
 of Maritime Systems and Operations](http://viproma.no) (ViProMa), and
 is currently maintained by [SINTEF Ocean](http://www.sintef.no/en/ocean/).
 
+Supported FMI Versions
+----------------------
+
+| Version | Status | Header | Library Source | C API Wrapper |
+|---------|--------|--------|----------------|---------------|
+| FMI 1.0 | Stable | `cppfmu_cs.hpp` | `cppfmu_cs.cpp` | `fmi_functions.cpp` |
+| FMI 2.0 | Stable | `cppfmu_cs.hpp` | `cppfmu_cs.cpp` | `fmi_functions.cpp` |
+| FMI 3.0 | Partial | `cppfmu_cs_fmi3.hpp` | `cppfmu_cs_fmi3.cpp` | `fmi3_functions.cpp` |
+
+### FMI 3.0 Support Status
+
+FMI 3.0 co-simulation is supported. The `SlaveInstance3` class provides virtual
+methods for all Co-Simulation API functions. Functions without a corresponding
+virtual method are hardcoded stubs that always return `fmi3Error`.
+
+**Fully implemented (virtual methods on `SlaveInstance3`):**
+- All Get/Set type functions (Float32, Float64, Int8–64, UInt8–64, Boolean, String, Binary)
+- Directional derivatives, adjoint derivatives, and output derivatives
+- Variable dependencies and number of dependencies
+- FMU state management (get/set/serialize/deserialize)
+- Enhanced `DoStep` with early return, event handling, and termination output parameters
+- Event Mode (`EnterEventMode`, `EvaluateDiscreteStates`, `UpdateDiscreteStates`, `EnterStepMode`)
+- `GetNumberOfEventIndicators` / `GetNumberOfContinuousStates`
+- Debug logging with categories
+
+**Genuine stubs (no virtual method — cannot be overridden by users):**
+- **Configuration Mode** — `fmi3EnterConfigurationMode` / `fmi3ExitConfigurationMode`
+  (optional feature for structural parameter tuning)
+- **Clock interval/shift** — `Get/SetIntervalDecimal/Fraction`, `Get/SetShiftDecimal/Fraction`
+  (optional feature for variable-interval and shifted clocks)
+- **Intermediate Update Callback** — parameter accepted during instantiation but ignored
+
+**Note:** `GetClock` and `SetClock` have virtual methods on `SlaveInstance3` and can be
+overridden by users; the default implementation throws `std::logic_error` for non-zero
+variable references, consistent with other type-specific Get/Set methods.
+
+### Why `SlaveInstance3` Instead of Extending `SlaveInstance`?
+
+FMI 3.0 introduces fundamental changes that make extending the existing
+`SlaveInstance` class impractical:
+
+1. **Different type system** — FMI 3.0 replaces `fmi2Real`/`fmi2Integer` with
+   typed variants (Float32, Float64, Int8–64, UInt8–64, Binary, Clock) and
+   adds an `nValues` parameter to every Get/Set function for array-aware access.
+
+2. **Different memory model** — FMI 3.0 removes the FMI memory allocator
+   callbacks entirely, requiring standard C++ `new`/`delete` instead of the
+   `cppfmu::Memory`/`cppfmu::Allocator` infrastructure used by FMI 1.0/2.0.
+
+3. **Different logger signature** — FMI 3.0 replaces the varargs-based logger
+   with a fixed-signature callback, requiring a separate `Logger3` class.
+
+4. **Different instantiation** — `fmi3InstantiateCoSimulation` has a different
+   parameter set (eventModeUsed, earlyReturnAllowed, intermediateUpdate callback)
+   that doesn't map to the existing `CppfmuInstantiateSlave` signature.
+
+5. **Enhanced DoStep** — FMI 3.0's `DoStep` returns four additional output
+   parameters (`eventHandlingNeeded`, `terminateSimulation`, `earlyReturn`,
+   `lastSuccessfulTime`) that have no analogue in FMI 2.0.
+
+Maintaining backward compatibility for FMI 1.0/2.0 users while accommodating
+these changes would have required either extensive conditional compilation
+within a single class or a proliferation of overloaded virtual methods.
+A separate `SlaveInstance3` class keeps each FMI version's interface clean
+and self-documenting.
+
 Getting involved
 ----------------
 If you have a question, a bug report or an enhancement request,
@@ -53,19 +119,19 @@ work as well):
 
 We also provide a [Conan](https://conan.io) recipe. This recipe builds a static library
 for CPPFMU that you can use in your code, but you still need to compile
-`fmi_functions.cpp`. The package can be created with `conan create . --user sintef
---channel stable`. The recipe and some precompiled binaries are available on Sintef
-Ocean's public artifactory], which can be added with `conan remote add sintef-public
-https://gitlab.sintef.no/api/v4/projects/22218/packages/conan`. Note that when using the
-conan recipe, FMI 1 or 2 is added as a dependency, so you do not need to fetch them
-yourself. To use CPPFMU with conan, add the following lines to your `conanfile.py`
-and `CMakeLists.txt`:
+`fmi_functions.cpp` (or `fmi3_functions.cpp` for FMI 3.0). The package can be created
+with `conan create . --user sintef --channel stable`. The recipe and some precompiled
+binaries are available on Sintef Ocean's public artifactory, which can be added with
+`conan remote add sintef-public https://gitlab.sintef.no/api/v4/projects/22218/packages/conan`.
+Note that when using the conan recipe, FMI 1, 2, or 3 is added as a dependency, so you
+do not need to fetch them yourself. To use CPPFMU with conan, add the following lines
+to your `conanfile.py` and `CMakeLists.txt`, showing how to do it with FMI 3:
 
 `conanfile.py`:
 ```python
   ...
   def requirements(self):
-      self.requires("cppfmu/1.0@sintef/stable")
+      self.requires("cppfmu/1.0@sintef/stable", options={"use_fmi_version": 3})
 
   def generate(self):
       # Copy fmi_function.cpp to your binary directory
@@ -73,7 +139,7 @@ and `CMakeLists.txt`:
           if require.build or require.test:
               continue
       if dep.ref.name == "cppfmu":
-          copy(self, "fmi_functions.cpp",
+          copy(self, "fmi3_functions.cpp", # or "fmi_function.cpp" for FMI 1 or 2
               dep.cpp_info.srcdirs[0],
               path.join(self.build_folder, dep.ref.name),
               keep_path=False)
@@ -92,12 +158,16 @@ and `CMakeLists.txt`:
 How it works
 ------------
 It's simple: We have already implemented all the FMI C functions
-for you in `fmi_functions.cpp`.  These forward to the C++ functions
-defined by you.  They also ensure that exceptions are caught,
-logged and turned into the appropriate error codes.
+for you in `fmi_functions.cpp` (or `fmi3_functions.cpp` for FMI 3.0).
+These forward to the C++ functions defined by you.  They also ensure
+that exceptions are caught, logged and turned into the appropriate
+error codes.
 
 Usage
 -----
+
+### FMI 1.0 and FMI 2.0
+
 To implement a *co-simulation slave*, this is what you have to do:
 
   1. Include the `cppfmu_cs.hpp` header in your sources.
@@ -112,6 +182,19 @@ To implement a *co-simulation slave*, this is what you have to do:
      is declared in the header file, in the global namespace, and you
      must define it with the exact same signature.  You'll find more
      information about this in the header too.
+
+### FMI 3.0
+
+  1. Include the `cppfmu_cs_fmi3.hpp` header in your sources.
+
+  2. Create a class that publicly derives from `cppfmu::SlaveInstance3`,
+     and override its virtual member functions as required.  Note that
+     all Get/Set methods include an `nValues` parameter for array-aware
+     access, and memory management uses standard C++ `new`/`delete`
+     (use `cppfmu::AllocateUnique3` instead of `cppfmu::AllocateUnique`).
+
+  3. Define the function `CppfmuInstantiateSlave()` with the FMI 3.0
+     signature (see `cppfmu_cs_fmi3.hpp` for details).
 
 That's more or less it. Read on below to learn how to deal with errors,
 memory management, and logging.
@@ -130,7 +213,8 @@ will be made to any of its member functions except the destructor.
 The message associated with the exception will be logged using the
 mechanism provided by the simulation environment (the `logger` callback
 in the C API), and the currently executing FMI function will return an
-error code.  For most exception types this will be `fmiError`.
+error code.  For most exception types this will be `fmiError` (or
+`fmi3Error` for FMI 3.0).
 
 If the nature of the error is such that all other instances have also
 become unusable, an exception of type `cppfmu::FatalError` (or a derived
@@ -180,6 +264,10 @@ higher-level C++ interface.  These are:
     with a custom deleter, and `cppfmu::AllocateUnique`, which
     allocates and constructs an object managed by a `UniquePtr`.
 
+**FMI 3.0** does not provide memory allocator callbacks.  Use standard
+C++ `new`/`delete` directly, or the convenience function
+`cppfmu::AllocateUnique3` defined in `cppfmu_cs_fmi3.hpp`.
+
 ### Logging
 
 FMI includes a logging mechanism which model/slave code can use to
@@ -192,6 +280,10 @@ An object of this type is passed to `CppfmuInstantiateSlave()` and
 must be passed on to any code that is to perform logging.
 
 The `Logger` class is defined and documented in `cppfmu_common.hpp`.
+
+**FMI 3.0** uses a different logger signature (no varargs, no instance
+name parameter).  A `Logger3` class is provided in `cppfmu_common.hpp`
+for this purpose.
 
 Licence
 -------
