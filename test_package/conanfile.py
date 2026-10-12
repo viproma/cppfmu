@@ -23,6 +23,10 @@ class CppFmuTestConan(ConanFile):
             if dep.ref.name == "cppfmu" and len(dep.cpp_info.srcdirs) > 0:
                 copy(self, "fmi_functions.cpp", dep.cpp_info.srcdirs[0],
                     path.join(self.build_folder, dep.ref.name), keep_path=False)
+                # The combined package also ships fmi3_functions.cpp; copying it
+                # too is harmless for a single-version package that has none.
+                copy(self, "fmi3_functions.cpp", dep.cpp_info.srcdirs[0],
+                    path.join(self.build_folder, dep.ref.name), keep_path=False)
 
 
     def build(self):

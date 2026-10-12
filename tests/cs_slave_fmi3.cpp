@@ -148,7 +148,14 @@ public:
     {
         if (!derivativeSupported_) {
             SlaveInstance3::GetDirectionalDerivative(
-                nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0);
+                nullptr,
+                0,
+                nullptr,
+                0,
+                nullptr,
+                0,
+                nullptr,
+                0);
         }
         for (std::size_t i = 0; i < nUnknown; ++i) {
             dvUnknown[i] = 0.0;
@@ -175,9 +182,8 @@ public:
 
     void GetFMUState(cppfmu::FMIFMUState* state) override
     {
-        auto s = (*state == nullptr)
-            ? new cppfmu::FMIReal
-            : static_cast<cppfmu::FMIReal*>(*state);
+        auto s = (*state == nullptr) ? new cppfmu::FMIReal
+                                     : static_cast<cppfmu::FMIReal*>(*state);
         *s = value_;
         *state = s;
     }
@@ -259,7 +265,10 @@ public:
             if (vr[i] == 3) {
                 sizes[i] = binaryData_.size();
                 if (value != nullptr && value[i] != nullptr) {
-                    std::memcpy(const_cast<cppfmu::FMIByte*>(value[i]), binaryData_.data(), binaryData_.size());
+                    std::memcpy(
+                        const_cast<cppfmu::FMIByte*>(value[i]),
+                        binaryData_.data(),
+                        binaryData_.size());
                 }
             } else {
                 throw std::logic_error("Invalid value reference");
@@ -289,7 +298,10 @@ cppfmu::UniquePtr<cppfmu::SlaveInstance3> CppfmuInstantiateSlave(
     const cppfmu::FMIValueReference[] /*requiredIntermediateVariables*/,
     std::size_t /*nRequiredIntermediateVariables*/,
     cppfmu::FMIComponentEnvironment /*instanceEnvironment*/,
-    std::function<void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)> /*logger*/)
+    std::function<void(
+        cppfmu::FMIStatus,
+        cppfmu::FMIString,
+        cppfmu::FMIString)> /*logger*/)
 {
     return cppfmu::AllocateUnique3<TestSlave3>();
 }

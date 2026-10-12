@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FMI 3.0 model description for the mass-spring-damper example.
+
+  Compared with ../fmi2/modelDescription.xml, note that FMI 3.0 replaces the
+  generic <ScalarVariable> wrapper with one element per type (<Float64> here),
+  renames "guid" to "instantiationToken", and refers to variables in
+  <ModelStructure> by valueReference rather than by 1-based index.
+
+  The valueReference of each variable matches the VR_* constants in
+  mass_spring_damper.cpp. The modelIdentifier must equal the base name of the
+  built shared library placed under binaries/<platform>/.
+
+  Replace the instantiationToken below with a freshly generated UUID for a real
+  model.
+-->
+<fmiModelDescription
+    fmiVersion="3.0"
+    modelName="MassSpringDamper"
+    instantiationToken="{d3c0ffee-3000-4a2e-9b0d-000000000003}"
+    description="Mass-spring-damper driven by an external force (cppfmu example)"
+    generationTool="cppfmu"
+    variableNamingConvention="structured">
+
+    <CoSimulation
+        modelIdentifier="MassSpringDamper"
+        canHandleVariableCommunicationStepSize="true"
+        canGetAndSetFMUState="false"
+        canSerializeFMUState="false"
+        providesIntermediateUpdate="false"
+        hasEventMode="false"/>
+
+    <ModelVariables>
+        <!-- Parameters -->
+        <Float64 name="mass" valueReference="0" causality="parameter"
+            variability="fixed" start="1.0" description="Mass m [kg]"/>
+        <Float64 name="stiffness" valueReference="1" causality="parameter"
+            variability="fixed" start="10.0" description="Spring stiffness k [N/m]"/>
+        <Float64 name="damping" valueReference="2" causality="parameter"
+            variability="fixed" start="0.5" description="Damping coefficient c [N*s/m]"/>
+
+        <!-- Input -->
+        <Float64 name="force" valueReference="3" causality="input"
+            variability="continuous" start="0.0" description="External force F [N]"/>
+
+        <!-- Outputs -->
+        <Float64 name="position" valueReference="4" causality="output"
+            variability="continuous" initial="exact" start="0.0"
+            description="Position x [m]"/>
+        <Float64 name="velocity" valueReference="5" causality="output"
+            variability="continuous" initial="exact" start="0.0"
+            description="Velocity v [m/s]"/>
+    </ModelVariables>
+
+    <ModelStructure>
+        <Output valueReference="4"/>
+        <Output valueReference="5"/>
+    </ModelStructure>
+</fmiModelDescription>

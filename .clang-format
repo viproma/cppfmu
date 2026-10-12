@@ -1,0 +1,67 @@
+# Approximates the formatting used in CppFMU before the FMI 3.0 work.
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++11
+
+ColumnLimit: 80
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+UseTab: Never
+IndentPPDirectives: AfterHash
+PPIndentWidth: 3
+NamespaceIndentation: None
+
+# Braces: on their own line after declarations, attached after control flow.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterEnum: true
+  AfterNamespace: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterControlStatement: Never
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# One parameter/argument per line once a call or signature has to break.
+AlignAfterOpenBracket: AlwaysBreak
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AlwaysBreakAfterReturnType: None
+PenaltyReturnTypeOnItsOwnLine: 1000
+
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+AlwaysBreakTemplateDeclarations: Yes
+SpaceAfterTemplateKeyword: false
+BreakConstructorInitializers: BeforeComma
+Cpp11BracedListStyle: true
+PointerAlignment: Left
+DerivePointerAlignment: false
+SpaceAfterCStyleCast: true
+
+AlignTrailingComments: true
+ReflowComments: false
+MaxEmptyLinesToKeep: 2
+KeepEmptyLinesAtTheStartOfBlocks: false
+SortIncludes: Never
+FixNamespaceComments: true
+IndentExternBlock: NoIndent
+SpaceInEmptyBlock: true
+AlignOperands: DontAlign

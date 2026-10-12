@@ -6,7 +6,7 @@
 ; Alternatively, manually change editor settings to match the
 ; following.
 
-root = true     ; This is the topmost .editorconfig file
+root = true
 
 [*]
 end_of_line = lf

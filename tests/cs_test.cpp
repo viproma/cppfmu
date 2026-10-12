@@ -1,10 +1,11 @@
 #ifdef CPPFMU_USE_FMI_1_0
-#define MODEL_IDENTIFIER
-extern "C" {
-#include <fmiFunctions.h>
+#   define MODEL_IDENTIFIER
+extern "C"
+{
+#   include <fmiFunctions.h>
 }
 #else
-#include <fmi2Functions.h>
+#   include <fmi2Functions.h>
 #endif
 
 #include <cassert>
@@ -60,7 +61,7 @@ extern "C" void logger(
 
 extern "C" void* alloc(std::size_t nobj, std::size_t size) noexcept
 {
-    return std::malloc(nobj*size);
+    return std::malloc(nobj * size);
 }
 
 
@@ -217,13 +218,8 @@ int main()
     assert(instance);
 
     {
-        const auto rc = fmi2SetupExperiment(
-            instance,
-            fmi2False,
-            0.0,
-            0.0,
-            fmi2False,
-            0.0);
+        const auto rc =
+            fmi2SetupExperiment(instance, fmi2False, 0.0, 0.0, fmi2False, 0.0);
         assert(rc == fmi2OK);
     }
 
@@ -256,7 +252,14 @@ int main()
         const fmi2ValueReference vr[] = {0};
         fmi2Real dvKnown[] = {1.0};
         fmi2Real dvUnknown[] = {0.0};
-        auto rc = fmi2GetDirectionalDerivative(instance, vr, 1, vr, 1, dvKnown, dvUnknown);
+        auto rc = fmi2GetDirectionalDerivative(
+            instance,
+            vr,
+            1,
+            vr,
+            1,
+            dvKnown,
+            dvUnknown);
         assert(rc == fmi2Error);
     }
     {
@@ -322,7 +325,14 @@ int main()
         const fmi2ValueReference vKnown[] = {0};
         fmi2Real dvKnown[] = {5.0};
         fmi2Real dvUnknown[] = {0.0};
-        auto rc = fmi2GetDirectionalDerivative(instance, vUnknown, 1, vKnown, 1, dvKnown, dvUnknown);
+        auto rc = fmi2GetDirectionalDerivative(
+            instance,
+            vUnknown,
+            1,
+            vKnown,
+            1,
+            dvKnown,
+            dvUnknown);
         assert(rc == fmi2OK);
         assert(dvUnknown[0] == 10.0);
     }
@@ -343,7 +353,10 @@ int main()
     auto serializedState = std::vector<fmi2Byte>(stateSize);
     {
         const auto rc = fmi2SerializeFMUstate(
-            instance, state, serializedState.data(), serializedState.size());
+            instance,
+            state,
+            serializedState.data(),
+            serializedState.size());
         assert(rc == fmi2OK);
     }
     {
@@ -375,7 +388,10 @@ int main()
     fmi2FMUstate restoredState = nullptr;
     {
         const auto rc = fmi2DeSerializeFMUstate(
-            instance, serializedState.data(), serializedState.size(), &restoredState);
+            instance,
+            serializedState.data(),
+            serializedState.size(),
+            &restoredState);
         assert(rc == fmi2OK);
         assert(restoredState != nullptr);
     }

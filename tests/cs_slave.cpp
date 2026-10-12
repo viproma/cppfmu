@@ -10,8 +10,7 @@ class TestSlave : public cppfmu::SlaveInstance
 public:
     explicit TestSlave(cppfmu::Memory memory)
         : memory_(memory)
-    {
-    }
+    { }
 
     void SetReal(
         const cppfmu::FMIValueReference vr[],
@@ -66,7 +65,8 @@ public:
     {
         for (std::size_t i = 0; i < nvr; ++i) {
             if (vr[i] == 1) {
-                value[i] = derivativeSupported_ ? cppfmu::FMITrue : cppfmu::FMIFalse;
+                value[i] =
+                    derivativeSupported_ ? cppfmu::FMITrue : cppfmu::FMIFalse;
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -83,9 +83,12 @@ public:
     {
         if (!derivativeSupported_) {
             SlaveInstance::GetDirectionalDerivative(
-                vUnknown_ref, nUnknown,
-                vKnown_ref, nKnown,
-                dvKnown, dvUnknown);
+                vUnknown_ref,
+                nUnknown,
+                vKnown_ref,
+                nKnown,
+                dvKnown,
+                dvUnknown);
         }
         for (std::size_t i = 0; i < nUnknown; ++i) {
             dvUnknown[i] = 0.0;
@@ -124,9 +127,8 @@ public:
 
     void GetFMUState(cppfmu::FMIFMUState* state) override
     {
-        auto s = (*state == nullptr)
-            ? cppfmu::New<cppfmu::FMIReal>(memory_)
-            : static_cast<cppfmu::FMIReal*>(*state);
+        auto s = (*state == nullptr) ? cppfmu::New<cppfmu::FMIReal>(memory_)
+                                     : static_cast<cppfmu::FMIReal*>(*state);
         *s = value_;
         *state = s;
     }
@@ -198,4 +200,3 @@ cppfmu::UniquePtr<cppfmu::SlaveInstance> CppfmuInstantiateSlave(
 {
     return cppfmu::AllocateUnique<TestSlave>(memory, memory);
 }
-

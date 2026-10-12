@@ -436,7 +436,8 @@ void SlaveInstance3::FreeFMUState(FMIFMUState /*state*/)
 
 std::size_t SlaveInstance3::SerializedFMUStateSize(FMIFMUState /*state*/)
 {
-    throw std::logic_error("Operation not supported: get serialized FMU state size");
+    throw std::logic_error(
+        "Operation not supported: get serialized FMU state size");
 }
 
 
@@ -467,7 +468,8 @@ void SlaveInstance3::GetDirectionalDerivative(
     FMIReal /*sensitivity*/[],
     std::size_t /*nSensitivity*/) const
 {
-    throw std::logic_error("Operation not supported: get directional derivative");
+    throw std::logic_error(
+        "Operation not supported: get directional derivative");
 }
 
 
@@ -493,7 +495,8 @@ void SlaveInstance3::GetVariableDependencies(
     FMIDependencyKind /*dependencyKinds*/[],
     std::size_t /*nDependencies*/) const
 {
-    throw std::logic_error("Operation not supported: get variable dependencies");
+    throw std::logic_error(
+        "Operation not supported: get variable dependencies");
 }
 
 
@@ -511,7 +514,8 @@ void SlaveInstance3::GetOutputDerivatives(
 std::size_t SlaveInstance3::GetNumberOfVariableDependencies(
     FMIValueReference /*valueReference*/) const
 {
-    throw std::logic_error("Operation not supported: get number of variable dependencies");
+    throw std::logic_error(
+        "Operation not supported: get number of variable dependencies");
 }
 
 

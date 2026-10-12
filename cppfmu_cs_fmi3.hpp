@@ -482,7 +482,8 @@ cppfmu::UniquePtr<cppfmu::SlaveInstance3> CppfmuInstantiateSlave(
     const cppfmu::FMIValueReference requiredIntermediateVariables[],
     std::size_t nRequiredIntermediateVariables,
     cppfmu::FMIComponentEnvironment instanceEnvironment,
-    std::function<void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)> logger);
+    std::function<void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)>
+        logger);
 
 
 namespace cppfmu
@@ -494,9 +495,9 @@ namespace cppfmu
 template<typename T, typename... Args>
 UniquePtr<T> AllocateUnique3(Args&&... args)
 {
-    return UniquePtr<T>{
-        new T(std::forward<Args>(args)...),
-        [] (void* ptr) { delete reinterpret_cast<T*>(ptr); }};
+    return UniquePtr<T>{new T(std::forward<Args>(args)...), [](void* ptr) {
+                            delete reinterpret_cast<T*>(ptr);
+                        }};
 }
 
 } // namespace cppfmu

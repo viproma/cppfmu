@@ -25,7 +25,7 @@ Supported FMI Versions
 |---------|--------|--------|----------------|---------------|
 | FMI 1.0 | Stable | `cppfmu_cs.hpp` | `cppfmu_cs.cpp` | `fmi_functions.cpp` |
 | FMI 2.0 | Stable | `cppfmu_cs.hpp` | `cppfmu_cs.cpp` | `fmi_functions.cpp` |
-| FMI 3.0 | Partial | `cppfmu_cs_fmi3.hpp` | `cppfmu_cs_fmi3.cpp` | `fmi3_functions.cpp` |
+| FMI 3.0 | Partial | `cppfmu_cs_fmi3.hpp` | `cppfmu_cs_fmi3.cpp`, `cppfmu_lifecycle_fmi3.cpp` | `fmi3_functions.cpp` |
 
 ### FMI 3.0 Support Status
 
@@ -41,7 +41,6 @@ virtual method are hardcoded stubs that always return `fmi3Error`.
 - Enhanced `DoStep` with early return, event handling, and termination output parameters
 - Event Mode (`EnterEventMode`, `EvaluateDiscreteStates`, `UpdateDiscreteStates`, `EnterStepMode`)
 - `GetNumberOfEventIndicators` / `GetNumberOfContinuousStates`
-- Debug logging with categories
 
 **Genuine stubs (no virtual method — cannot be overridden by users):**
 - **Configuration Mode** — `fmi3EnterConfigurationMode` / `fmi3ExitConfigurationMode`
@@ -50,9 +49,27 @@ virtual method are hardcoded stubs that always return `fmi3Error`.
   (optional feature for variable-interval and shifted clocks)
 - **Intermediate Update Callback** — parameter accepted during instantiation but ignored
 
+Debug logging with categories (`fmi3SetDebugLogging`) is handled entirely by the
+C API wrapper, so there is no virtual method for it.
+
 **Note:** `GetClock` and `SetClock` have virtual methods on `SlaveInstance3` and can be
 overridden by users; the default implementation throws `std::logic_error` for non-zero
 variable references, consistent with other type-specific Get/Set methods.
+
+### FMI 3.0 lifecycle enforcement
+
+FMI 3.0 prescribes which calls are legal in which mode, and CPPFMU enforces
+this for you. The `cppfmu::Lifecycle` class
+(`cppfmu_lifecycle_fmi3.{hpp,cpp}`) holds the whole Co-Simulation state graph
+in one transition table: a call made in a state that does not allow it is
+refused with `fmi3Error` and never reaches your slave, and a call that throws
+something other than a refusal puts the instance in a failed state, from which
+only freeing, resetting or restoring a saved FMU state escapes. Your slave code
+therefore does not need to check the current mode itself.
+
+This applies to FMI 3.0 only; the FMI 1.0/2.0 implementation has no state
+machine. When you compile CPPFMU by hand rather than through Conan, remember to
+compile `cppfmu_lifecycle_fmi3.cpp` alongside `cppfmu_cs_fmi3.cpp`.
 
 ### Why `SlaveInstance3` Instead of Extending `SlaveInstance`?
 
@@ -95,6 +112,8 @@ you label your issue appropriately.
 Contributions are very welcome, and should be submitted as
 [pull requests on GitHub](https://github.com/viproma/cppfmu/pulls).
 
+Notable changes per release are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
 
 Building
 --------
@@ -124,36 +143,69 @@ with `conan create . --user sintef --channel stable`. The recipe and some precom
 binaries are available on Sintef Ocean's public artifactory, which can be added with
 `conan remote add sintef-public https://gitlab.sintef.no/api/v4/projects/22218/packages/conan`.
 Note that when using the conan recipe, FMI 1, 2, or 3 is added as a dependency, so you
-do not need to fetch them yourself. To use CPPFMU with conan, add the following lines
-to your `conanfile.py` and `CMakeLists.txt`, showing how to do it with FMI 3:
+do not need to fetch them yourself.
+
+The FMI version is selected with the `use_fmi_version` option, which accepts:
+
+| Value   | Meaning                                                              |
+|---------|---------------------------------------------------------------------|
+| `1`     | FMI 1.0 (`fmi_functions.cpp`, defines `CPPFMU_USE_FMI_1_0`)          |
+| `2`     | FMI 2.0 (`fmi_functions.cpp`, the default)                          |
+| `3`     | FMI 3.0 (`fmi3_functions.cpp`, defines `CPPFMU_USE_FMI_3_0`)         |
+| `"all"` | Combined FMI 2.0 + 3.0 in one library (ships both C API wrappers)    |
+
+To use CPPFMU with conan, add the following lines to your `conanfile.py` and
+`CMakeLists.txt`. The example below uses FMI 3.0; change the option value and
+the copied `fmi*_functions.cpp` filename for other versions.
 
 `conanfile.py`:
 ```python
+from os import path
+from conan.tools.files import copy
+
   ...
   def requirements(self):
-      self.requires("cppfmu/1.0@sintef/stable", options={"use_fmi_version": 3})
+      self.requires("cppfmu/1.3.0@sintef/stable", options={"use_fmi_version": 3})
 
   def generate(self):
-      # Copy fmi_function.cpp to your binary directory
+      # Copy the C API wrapper into your build folder so you can compile it
+      # together with your model sources (see CMakeLists.txt below).
       for require, dep in self.dependencies.items():
           if require.build or require.test:
               continue
-      if dep.ref.name == "cppfmu":
-          copy(self, "fmi3_functions.cpp", # or "fmi_function.cpp" for FMI 1 or 2
-              dep.cpp_info.srcdirs[0],
-              path.join(self.build_folder, dep.ref.name),
-              keep_path=False)
+          if dep.ref.name == "cppfmu":
+              copy(self, "fmi3_functions.cpp",  # "fmi_functions.cpp" for FMI 1 or 2
+                  dep.cpp_info.srcdirs[0],
+                  path.join(self.build_folder, dep.ref.name),
+                  keep_path=False)
 ```
 
 `CMakeLists.txt`:
 ```cmake
-  find_package(cppfmu REQUIRED)
-  add_library(FmuModuleTarget MODULE
+find_package(cppfmu REQUIRED)
+
+# An FMU binary is a shared library (MODULE), built from your model sources
+# plus the C API wrapper copied in by the conanfile generate() step above.
+# Use fmi3_functions.cpp for FMI 3.0, fmi_functions.cpp for FMI 1.0/2.0.
+add_library(FmuModuleTarget MODULE
     ${fmuSourceFiles}
-    ${CMAKE_BINARY_DIR}/cppfmu/fmi_functions.cpp
+    ${CMAKE_BINARY_DIR}/cppfmu/fmi3_functions.cpp
     )
-  target_link_libraries(FmuModuleTarget PUBLIC cppfmu::cppfmu)
+target_link_libraries(FmuModuleTarget PUBLIC cppfmu::cppfmu)
 ```
+
+Instead of copying the wrapper, you can compile it straight out of the package
+folder, which CMakeDeps exposes as `cppfmu_PACKAGE_FOLDER_RELEASE` (or
+`..._DEBUG`); then `generate()` needs no `copy()` at all. Both approaches work —
+[`examples/`](examples/) uses the direct one, and
+`test_package/CMakeLists.txt` shows it for the combined package.
+
+The `cppfmu::cppfmu` target carries the FMI include paths and the correct
+`CPPFMU_USE_FMI_*` define for the version you selected, so you do not need to
+set any of those yourself. (The `"all"` combined package is the exception: it
+sets no version macro, so each of your modules must define `CPPFMU_USE_FMI_3_0`
+itself when it compiles the FMI 3.0 wrapper, and define nothing for FMI 2.0.
+See `test_package/CMakeLists.txt` for a worked combined-package example.)
 
 How it works
 ------------
@@ -162,6 +214,43 @@ for you in `fmi_functions.cpp` (or `fmi3_functions.cpp` for FMI 3.0).
 These forward to the C++ functions defined by you.  They also ensure
 that exceptions are caught, logged and turned into the appropriate
 error codes.
+
+Packaging a `.fmu`
+------------------
+CPPFMU builds the shared library that goes *inside* an FMU; it does not
+assemble the FMU archive itself. An `.fmu` file is just a ZIP archive with a
+fixed layout:
+
+```
+MyModel.fmu   (a ZIP archive)
+├── modelDescription.xml           # required; describes variables, VRs, capabilities
+├── binaries/
+│   ├── x86_64-linux/MyModel.so     # FMI 3.0 platform dir names
+│   ├── x86_64-windows/MyModel.dll
+│   └── x86_64-darwin/MyModel.dylib
+└── resources/                      # optional; files your model loads at runtime
+```
+
+A few things to get right:
+
+  * The shared-library base name (`MyModel`) must match the
+    `modelIdentifier` attribute in `modelDescription.xml`.
+  * The platform subdirectory names differ between FMI versions. FMI 2.0 uses
+    names like `linux64`, `win64`, `darwin64`; FMI 3.0 uses the target-triple
+    style shown above (`x86_64-linux`, `x86_64-windows`, `aarch64-darwin`, …).
+    Check the relevant FMI specification for the exact list.
+  * Build the library as a `MODULE` (see the CMake snippet above) so it is
+    loadable at runtime by the importing tool.
+
+Once the tree is assembled, zip it (with the files at the archive root, not
+nested in a top-level folder) and rename to `.fmu`:
+
+```sh
+cd MyModel && zip -r ../MyModel.fmu . && cd ..
+```
+
+See [`examples/`](examples/) for complete `modelDescription.xml` files and
+end-to-end build + packaging steps.
 
 Usage
 -----
@@ -194,7 +283,27 @@ To implement a *co-simulation slave*, this is what you have to do:
      (use `cppfmu::AllocateUnique3` instead of `cppfmu::AllocateUnique`).
 
   3. Define the function `CppfmuInstantiateSlave()` with the FMI 3.0
-     signature (see `cppfmu_cs_fmi3.hpp` for details).
+     signature. It is declared in `cppfmu_cs_fmi3.hpp`, in the global
+     namespace, and takes the FMI 3.0 instantiation parameters:
+
+     ```cpp
+     cppfmu::UniquePtr<cppfmu::SlaveInstance3> CppfmuInstantiateSlave(
+         cppfmu::FMIString instanceName,
+         cppfmu::FMIString instantiationToken,
+         cppfmu::FMIString resourceLocation,
+         cppfmu::FMIBoolean visible,
+         cppfmu::FMIBoolean loggingOn,
+         cppfmu::FMIBoolean eventModeUsed,
+         cppfmu::FMIBoolean earlyReturnAllowed,
+         const cppfmu::FMIValueReference requiredIntermediateVariables[],
+         std::size_t nRequiredIntermediateVariables,
+         cppfmu::FMIComponentEnvironment instanceEnvironment,
+         std::function<void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)> logger);
+     ```
+
+Complete, runnable models for both FMI 2.0 and FMI 3.0 (a mass-spring-damper,
+with a matching `modelDescription.xml` and build files) are provided in the
+[`examples/`](examples/) directory.
 
 That's more or less it. Read on below to learn how to deal with errors,
 memory management, and logging.

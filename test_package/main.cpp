@@ -1,28 +1,39 @@
 #include <iostream>
 
 #ifdef CPPFMU_USE_FMI_3_0
-#include "cppfmu_cs_fmi3.hpp"
+#   include "cppfmu_cs_fmi3.hpp"
 
 cppfmu::UniquePtr<cppfmu::SlaveInstance3> CppfmuInstantiateSlave(
-  cppfmu::FMIString, cppfmu::FMIString,
-  cppfmu::FMIString, cppfmu::FMIBoolean, cppfmu::FMIBoolean,
-  cppfmu::FMIBoolean, cppfmu::FMIBoolean,
-  const cppfmu::FMIValueReference[], std::size_t,
-  cppfmu::FMIComponentEnvironment,
-  std::function<void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)>) {
-
-  return nullptr;
+    cppfmu::FMIString,
+    cppfmu::FMIString,
+    cppfmu::FMIString,
+    cppfmu::FMIBoolean,
+    cppfmu::FMIBoolean,
+    cppfmu::FMIBoolean,
+    cppfmu::FMIBoolean,
+    const cppfmu::FMIValueReference[],
+    std::size_t,
+    cppfmu::FMIComponentEnvironment,
+    std::function<
+        void(cppfmu::FMIStatus, cppfmu::FMIString, cppfmu::FMIString)>)
+{
+    return nullptr;
 }
 #else
-#include "cppfmu_cs.hpp"
+#   include "cppfmu_cs.hpp"
 
 cppfmu::UniquePtr<cppfmu::SlaveInstance> CppfmuInstantiateSlave(
-  cppfmu::FMIString instanceName, cppfmu::FMIString,
-  cppfmu::FMIString, cppfmu::FMIString,
-  cppfmu::FMIReal, cppfmu::FMIBoolean, cppfmu::FMIBoolean,
-  cppfmu::Memory memory, cppfmu::Logger) {
-
-  return nullptr;
+    cppfmu::FMIString instanceName,
+    cppfmu::FMIString,
+    cppfmu::FMIString,
+    cppfmu::FMIString,
+    cppfmu::FMIReal,
+    cppfmu::FMIBoolean,
+    cppfmu::FMIBoolean,
+    cppfmu::Memory memory,
+    cppfmu::Logger)
+{
+    return nullptr;
 }
 #endif
 

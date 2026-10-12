@@ -8,10 +8,8 @@
 #include <string>
 #include <vector>
 
-
 const double TEST_VALUE = 2.0;
 const char* const TEST_INSTANCE_NAME = "MyInstance";
-
 
 extern "C" void logger(
     fmi3InstanceEnvironment,
@@ -21,7 +19,6 @@ extern "C" void logger(
 {
     std::fprintf(stderr, "[%s] %s\n", category, message);
 }
-
 
 int main()
 {
@@ -44,7 +41,12 @@ int main()
     // Initialization (FMI 3.0)
     {
         const auto rc = fmi3EnterInitializationMode(
-            instance, fmi3False, 0.0, 0.0, fmi3False, 0.0);
+            instance,
+            fmi3False,
+            0.0,
+            0.0,
+            fmi3False,
+            0.0);
         assert(rc == fmi3OK);
     }
     {
@@ -70,7 +72,16 @@ int main()
         const fmi3ValueReference vr[] = {0};
         fmi3Float64 dvKnown[] = {1.0};
         fmi3Float64 dvUnknown[] = {0.0};
-        auto rc = fmi3GetDirectionalDerivative(instance, vr, 1, vr, 1, dvKnown, 1, dvUnknown, 1);
+        auto rc = fmi3GetDirectionalDerivative(
+            instance,
+            vr,
+            1,
+            vr,
+            1,
+            dvKnown,
+            1,
+            dvUnknown,
+            1);
         assert(rc == fmi3Error);
     }
     {
@@ -95,7 +106,8 @@ int main()
         assert(rc == fmi3OK);
     }
 
-    // fmi3GetOutputDerivatives — success, value = seed * order = 2.0 * 1 = 2.0 (FMI 3.0)
+    // fmi3GetOutputDerivatives — success, value = seed * order = 2.0 * 1 = 2.0
+    // (FMI 3.0)
     {
         const fmi3ValueReference vr[] = {0};
         fmi3Int32 order[] = {1};
@@ -105,13 +117,23 @@ int main()
         assert(value[0] == 2.0);
     }
 
-    // fmi3GetDirectionalDerivative — success, dvUnknown = seed * dvKnown = 2.0 * 5.0 = 10.0 (FMI 3.0)
+    // fmi3GetDirectionalDerivative — success, dvUnknown = seed * dvKnown = 2.0
+    // * 5.0 = 10.0 (FMI 3.0)
     {
         const fmi3ValueReference vUnknown[] = {0};
         const fmi3ValueReference vKnown[] = {0};
         fmi3Float64 dvKnown[] = {5.0};
         fmi3Float64 dvUnknown[] = {0.0};
-        auto rc = fmi3GetDirectionalDerivative(instance, vUnknown, 1, vKnown, 1, dvKnown, 1, dvUnknown, 1);
+        auto rc = fmi3GetDirectionalDerivative(
+            instance,
+            vUnknown,
+            1,
+            vKnown,
+            1,
+            dvKnown,
+            1,
+            dvUnknown,
+            1);
         assert(rc == fmi3OK);
         assert(dvUnknown[0] == 10.0);
     }
@@ -132,7 +154,10 @@ int main()
     auto serializedState = std::vector<fmi3Byte>(stateSize);
     {
         const auto rc = fmi3SerializeFMUState(
-            instance, state, serializedState.data(), serializedState.size());
+            instance,
+            state,
+            serializedState.data(),
+            serializedState.size());
         assert(rc == fmi3OK);
     }
     {
@@ -148,8 +173,14 @@ int main()
         fmi3Boolean earlyReturn = fmi3True;
         fmi3Float64 lastSuccessfulTime = 0.0;
         const auto rc = fmi3DoStep(
-            instance, 0.0, 0.1, fmi3False,
-            &eventHandlingNeeded, &terminateSimulation, &earlyReturn, &lastSuccessfulTime);
+            instance,
+            0.0,
+            0.1,
+            fmi3False,
+            &eventHandlingNeeded,
+            &terminateSimulation,
+            &earlyReturn,
+            &lastSuccessfulTime);
         assert(rc == fmi3OK);
         assert(eventHandlingNeeded == fmi3False);
         assert(terminateSimulation == fmi3False);
@@ -162,8 +193,14 @@ int main()
     }
     {
         const auto rc = fmi3DoStep(
-            instance, 0.0, 0.1, fmi3False,
-            nullptr, nullptr, nullptr, nullptr);
+            instance,
+            0.0,
+            0.1,
+            fmi3False,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr);
         assert(rc == fmi3OK);
     }
     {
@@ -175,7 +212,10 @@ int main()
     fmi3FMUState restoredState = nullptr;
     {
         const auto rc = fmi3DeserializeFMUState(
-            instance, serializedState.data(), serializedState.size(), &restoredState);
+            instance,
+            serializedState.data(),
+            serializedState.size(),
+            &restoredState);
         assert(rc == fmi3OK);
         assert(restoredState != nullptr);
     }
@@ -312,7 +352,16 @@ int main()
         const fmi3ValueReference vr[] = {0};
         fmi3Float64 seed[] = {1.0};
         fmi3Float64 sensitivity[] = {0.0};
-        const auto rc = fmi3GetAdjointDerivative(instance, vr, 1, vr, 1, seed, 1, sensitivity, 1);
+        const auto rc = fmi3GetAdjointDerivative(
+            instance,
+            vr,
+            1,
+            vr,
+            1,
+            seed,
+            1,
+            sensitivity,
+            1);
         assert(rc == fmi3Error);
     }
 
@@ -323,16 +372,21 @@ int main()
         size_t elementIndicesOfIndependents[10] = {0};
         fmi3DependencyKind dependencyKinds[10] = {};
         const auto rc = fmi3GetVariableDependencies(
-            instance, 0, elementIndicesOfDependent,
-            independents, elementIndicesOfIndependents,
-            dependencyKinds, 10);
+            instance,
+            0,
+            elementIndicesOfDependent,
+            independents,
+            elementIndicesOfIndependents,
+            dependencyKinds,
+            10);
         assert(rc == fmi3Error);
     }
 
     // Test fmi3GetNumberOfVariableDependencies (error path, not supported)
     {
         size_t nDeps = 99;
-        const auto rc = fmi3GetNumberOfVariableDependencies(instance, 0, &nDeps);
+        const auto rc =
+            fmi3GetNumberOfVariableDependencies(instance, 0, &nDeps);
         assert(rc == fmi3Error);
     }
 
@@ -353,8 +407,13 @@ int main()
         fmi3Boolean timeDefined = fmi3True;
         fmi3Float64 time = 99.0;
         const auto rc = fmi3UpdateDiscreteStates(
-            instance, &needUpdate, &termSim, &nominalsChanged,
-            &valuesChanged, &timeDefined, &time);
+            instance,
+            &needUpdate,
+            &termSim,
+            &nominalsChanged,
+            &valuesChanged,
+            &timeDefined,
+            &time);
         assert(rc == fmi3OK);
         assert(needUpdate == fmi3False);
         assert(termSim == fmi3False);
@@ -373,15 +432,17 @@ int main()
         fmi3FreeInstance(nullptr);
     }
 
-    // Test fmi3Reset
+    // Termination (FMI 3.0). Terminate is legal from Step Mode; the state machine
+    // then allows Reset from Terminated, which returns the instance to
+    // Instantiated.
+    const auto terminateResult = fmi3Terminate(instance);
+    assert(terminateResult == fmi3OK);
+
+    // Test fmi3Reset (from Terminated)
     {
         const auto rc = fmi3Reset(instance);
         assert(rc == fmi3OK);
     }
-
-    // Termination (FMI 3.0)
-    const auto terminateResult = fmi3Terminate(instance);
-    assert(terminateResult == fmi3OK);
 
     fmi3FreeInstance(instance);
 
