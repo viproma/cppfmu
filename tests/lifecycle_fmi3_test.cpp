@@ -246,5 +246,24 @@ int main()
         assert(lc.CurrentState() == s);
     }
 
+    // -- With Event Mode in use, Initialization leads to Event Mode, and the
+    //    rest of the graph is unchanged. --
+    {
+        Lifecycle lc{true};
+        lc.OnSuccess(LifecycleCall::EnterInitialization);
+        lc.OnSuccess(LifecycleCall::ExitInitialization);
+        assert(lc.CurrentState() == State::Event);
+        assert(lc.Allows(LifecycleCall::UpdateDiscreteStates));
+        assert(!lc.Allows(LifecycleCall::DoStep));
+        lc.OnSuccess(LifecycleCall::EnterStepMode);
+        assert(lc.CurrentState() == State::Step);
+        lc.OnSuccess(LifecycleCall::EnterEventMode);
+        assert(lc.CurrentState() == State::Event);
+        lc.OnSuccess(LifecycleCall::Reset);
+        lc.OnSuccess(LifecycleCall::EnterInitialization);
+        lc.OnSuccess(LifecycleCall::ExitInitialization);
+        assert(lc.CurrentState() == State::Event);
+    }
+
     return 0;
 }

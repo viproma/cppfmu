@@ -446,5 +446,38 @@ int main()
 
     fmi3FreeInstance(instance);
 
+    // With eventModeUsed, leaving Initialization Mode enters Event Mode: the
+    // importer updates discrete states before the first step (FMI 3.0, 4.2).
+    {
+        const auto eventInstance = fmi3InstantiateCoSimulation(
+            TEST_INSTANCE_NAME,
+            "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+            "",
+            fmi3False,
+            fmi3True,
+            fmi3True, // eventModeUsed
+            fmi3False,
+            nullptr,
+            0,
+            nullptr,
+            &logger,
+            nullptr);
+        assert(eventInstance);
+        assert(fmi3EnterInitializationMode(eventInstance, fmi3False, 0.0, 0.0, fmi3False, 0.0) == fmi3OK);
+        assert(fmi3ExitInitializationMode(eventInstance) == fmi3OK);
+        fmi3Boolean needUpdate, terminate, nominalsChanged, valuesChanged, nextDefined;
+        fmi3Float64 nextTime;
+        assert(fmi3UpdateDiscreteStates(eventInstance, &needUpdate, &terminate,
+            &nominalsChanged, &valuesChanged, &nextDefined, &nextTime) == fmi3OK);
+        fmi3Boolean eventNeeded, terminateSim, early;
+        fmi3Float64 lastTime;
+        assert(fmi3DoStep(eventInstance, 0.0, 0.1, fmi3False, &eventNeeded, &terminateSim,
+            &early, &lastTime) == fmi3Error); // not in Step Mode yet
+        assert(fmi3EnterStepMode(eventInstance) == fmi3OK);
+        assert(fmi3DoStep(eventInstance, 0.0, 0.1, fmi3False, &eventNeeded, &terminateSim,
+            &early, &lastTime) == fmi3OK);
+        fmi3FreeInstance(eventInstance);
+    }
+
     return 0;
 }
