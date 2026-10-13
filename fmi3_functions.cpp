@@ -21,12 +21,18 @@
  * more, and a call the slave threw a non-logic exception out of latches the
  * instance failed, after which FMI 3.0 allows only freeing, resetting, and
  * restoring a saved state.
+ *
+ * If the importer passes an fmi3IntermediateUpdateCallback, the slave may call
+ * it from DoStep() through SlaveInstance3::IntermediateUpdate(); for as long
+ * as it runs the instance is in Intermediate Update Mode, where only the
+ * variable access the FMU opened the update for is legal.
  */
 
 #include <exception>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "cppfmu_cs_fmi3.hpp"
@@ -50,6 +56,65 @@ struct Component
         , lifecycle{eventModeUsed == fmi3True}
         , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
     { }
+
+    /* Enters Intermediate Update Mode around the importer's callback, for
+     * SlaveInstance3::IntermediateUpdate(). */
+    cppfmu::SlaveInstance3::IntermediateUpdateResult IntermediateUpdate(
+        cppfmu::FMIReal time,
+        bool variableSetRequested,
+        bool variableGetAllowed,
+        bool stepFinished,
+        bool canReturnEarly)
+    {
+        if (!inDoStep) {
+            throw std::logic_error(
+                "IntermediateUpdate may only be called from DoStep");
+        }
+        if (!(time >= stepStart && time <= stepEnd)) {
+            throw std::logic_error(
+                "IntermediateUpdate: the time " + std::to_string(time) +
+                " is outside the current step [" + std::to_string(stepStart) +
+                ", " + std::to_string(stepEnd) + "]");
+        }
+        if (time < lastFinishedUpdate) {
+            throw std::logic_error(
+                "IntermediateUpdate: the time " + std::to_string(time) +
+                " precedes an earlier update with intermediateStepFinished, at " +
+                std::to_string(lastFinishedUpdate));
+        }
+
+        fmi3Boolean earlyReturnRequested = fmi3False;
+        fmi3Float64 earlyReturnTime = time;
+        lifecycle.EnterIntermediateUpdate(variableSetRequested, variableGetAllowed);
+        intermediateUpdate(
+            instanceEnvironment,
+            time,
+            variableSetRequested ? fmi3True : fmi3False,
+            variableGetAllowed ? fmi3True : fmi3False,
+            stepFinished ? fmi3True : fmi3False,
+            canReturnEarly ? fmi3True : fmi3False,
+            &earlyReturnRequested,
+            &earlyReturnTime);
+        lifecycle.LeaveIntermediateUpdate();
+        if (lifecycle.CurrentState() == Lifecycle::State::Failed) {
+            throw std::runtime_error(
+                "A call made in Intermediate Update Mode failed the instance");
+        }
+        if (stepFinished) lastFinishedUpdate = time;
+
+        cppfmu::SlaveInstance3::IntermediateUpdateResult result;
+        if (canReturnEarly && earlyReturnRequested == fmi3True) {
+            if (!(earlyReturnTime >= stepStart && earlyReturnTime <= stepEnd)) {
+                throw std::runtime_error(
+                    "The importer requested an early return at " +
+                    std::to_string(earlyReturnTime) +
+                    ", outside the current step");
+            }
+            result.earlyReturnRequested = true;
+            result.earlyReturnTime = earlyReturnTime;
+        }
+        return result;
+    }
 
     bool IsCategoryLogged(const std::string& category) const
     {
@@ -81,6 +146,36 @@ struct Component
     cppfmu::UniquePtr<cppfmu::SlaveInstance3> slave;
     Lifecycle lifecycle;
     cppfmu::FMIReal lastSuccessfulTime;
+
+    // Intermediate update: the importer's callback (may be null), whether a
+    // DoStep is running and over which step, and the time of its last update
+    // with intermediateStepFinished.
+    fmi3IntermediateUpdateCallback intermediateUpdate = nullptr;
+    bool inDoStep = false;
+    cppfmu::FMIReal stepStart = 0.0;
+    cppfmu::FMIReal stepEnd = 0.0;
+    cppfmu::FMIReal lastFinishedUpdate = 0.0;
+};
+
+/* Marks a DoStep as running for as long as it lives, also when the slave
+ * throws. */
+class DoStepScope
+{
+public:
+    DoStepScope(Component& component, cppfmu::FMIReal start, cppfmu::FMIReal end)
+        : m_component(component)
+    {
+        m_component.inDoStep = true;
+        m_component.stepStart = start;
+        m_component.stepEnd = end;
+        m_component.lastFinishedUpdate = start;
+    }
+    ~DoStepScope() { m_component.inDoStep = false; }
+    DoStepScope(const DoStepScope&) = delete;
+    DoStepScope& operator=(const DoStepScope&) = delete;
+
+private:
+    Component& m_component;
 };
 
 Component* AsComponent(fmi3Instance instance)
@@ -272,7 +367,6 @@ fmi3Instance fmi3InstantiateCoSimulation(
     fmi3LogMessageCallback logMessage,
     fmi3IntermediateUpdateCallback intermediateUpdate)
 {
-    (void) intermediateUpdate;
     std::unique_ptr<Component> component;
     try {
         component.reset(
@@ -299,6 +393,23 @@ fmi3Instance fmi3InstantiateCoSimulation(
             instanceEnvironment,
             loggerFn);
 
+        if (intermediateUpdate != nullptr) {
+            component->intermediateUpdate = intermediateUpdate;
+            component->slave->SetIntermediateUpdateFunction(
+                [comp](
+                    cppfmu::FMIReal time,
+                    bool variableSetRequested,
+                    bool variableGetAllowed,
+                    bool stepFinished,
+                    bool canReturnEarly) {
+                    return comp->IntermediateUpdate(
+                        time,
+                        variableSetRequested,
+                        variableGetAllowed,
+                        stepFinished,
+                        canReturnEarly);
+                });
+        }
         return component.release();
     } catch (const cppfmu::FatalError& e) {
         if (logMessage) {
@@ -1096,7 +1207,7 @@ fmi3Status fmi3GetOutputDerivatives(
     return RunLegalCall(
         instance,
         "fmi3GetOutputDerivatives",
-        LifecycleCall::StepModeQuery,
+        LifecycleCall::OutputDerivatives,
         [&](const cppfmu::SlaveInstance3& slave) {
             slave.GetOutputDerivatives(vr, nvr, orders, values, nValues);
         });
@@ -1495,6 +1606,11 @@ fmi3Status fmi3DoStep(
         fmi3Boolean earlyRet = fmi3False;
         fmi3Float64 endOfStep = currentCommunicationPoint;
 
+        const DoStepScope scope(
+            *component,
+            static_cast<cppfmu::FMIReal>(currentCommunicationPoint),
+            static_cast<cppfmu::FMIReal>(
+                currentCommunicationPoint + communicationStepSize));
         const bool stepCompleted = component->slave->DoStep(
             static_cast<cppfmu::FMIReal>(currentCommunicationPoint),
             static_cast<cppfmu::FMIReal>(communicationStepSize),

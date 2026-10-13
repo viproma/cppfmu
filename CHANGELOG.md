@@ -22,6 +22,15 @@ Unreleased
 - `examples/` directory with a mass-spring-damper co-simulation slave for both
   FMI 2.0 and FMI 3.0, each with a matching `modelDescription.xml`, Conan
   recipe and `CMakeLists.txt`.
+- FMI 3.0 Intermediate Update Mode. The `fmi3IntermediateUpdateCallback` passed
+  to `fmi3InstantiateCoSimulation` is no longer ignored: a slave calls it from
+  `DoStep` through the new protected `SlaveInstance3::IntermediateUpdate()`
+  (with `IntermediateUpdateAvailable()` to check for it), which returns the
+  importer's early-return request. The lifecycle gains an `IntermediateUpdate`
+  state, in which only the variable gets (and `fmi3GetOutputDerivatives`) and
+  sets the FMU opened the update for are legal, gets before sets; output
+  derivatives have their own `LifecycleCall::OutputDerivatives` rule. Existing
+  slaves are unaffected.
 
 ### Changed
 - FMI 3.0 lifecycle handling extracted into a separate, testable `Lifecycle`

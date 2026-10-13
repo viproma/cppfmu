@@ -36,6 +36,7 @@ const State kAllStates[] = {
     State::Event,
     State::Terminated,
     State::Failed,
+    State::IntermediateUpdate,
 };
 
 // Drives a fresh Lifecycle to 'target' through the transitions that reach it,
@@ -65,6 +66,12 @@ Lifecycle At(State target)
         break;
     case State::Failed:
         lc.Fail();
+        break;
+    case State::IntermediateUpdate:
+        // Opened for both gets and sets: the widest the update can be.
+        lc.OnSuccess(LifecycleCall::EnterInitialization);
+        lc.OnSuccess(LifecycleCall::ExitInitialization);
+        lc.EnterIntermediateUpdate(true, true);
         break;
     }
     assert(lc.CurrentState() == target);
@@ -125,20 +132,23 @@ int main()
          State::Failed});
 
     // A variable may be written before Terminate, and read in those plus
-    // Terminated. Neither reaches a Failed instance.
+    // Terminated, and both in an intermediate update that allows it. Neither
+    // reaches a Failed instance.
     AssertLegalIn(
         LifecycleCall::WriteVariable,
         {State::Instantiated,
          State::Initialization,
          State::Step,
-         State::Event});
+         State::Event,
+         State::IntermediateUpdate});
     AssertLegalIn(
         LifecycleCall::ReadVariable,
         {State::Instantiated,
          State::Initialization,
          State::Step,
          State::Event,
-         State::Terminated});
+         State::Terminated,
+         State::IntermediateUpdate});
 
     // Snapshot memory may be handled in any state, Failed included; a fresh
     // snapshot may be read in any state but Failed; a snapshot may be restored
@@ -170,6 +180,9 @@ int main()
     // Derivatives and stepping are Step-Mode only; discrete-state calls are
     // confined to the modes that evaluate them.
     AssertLegalIn(LifecycleCall::StepModeQuery, {State::Step});
+    AssertLegalIn(
+        LifecycleCall::OutputDerivatives,
+        {State::Step, State::IntermediateUpdate});
     AssertLegalIn(LifecycleCall::DoStep, {State::Step});
     AssertLegalIn(
         LifecycleCall::EvaluateDiscreteStates,
@@ -197,8 +210,10 @@ int main()
         LifecycleCall::Terminate,
         State::Terminated);
 
-    // Reset returns to Instantiated from every state, Failed included.
+    // Reset returns to Instantiated from every state it is legal in, Failed
+    // included.
     for (const auto s : kAllStates) {
+        if (s == State::IntermediateUpdate) continue;
         AssertTransition(s, LifecycleCall::Reset, State::Instantiated);
     }
 
@@ -248,6 +263,63 @@ int main()
         auto lc = At(s);
         lc.RestoreFromSnapshot();
         assert(lc.CurrentState() == s);
+    }
+
+    // ========================================================================
+    // Intermediate Update Mode: entered from Step only, narrowed to what the
+    // FMU opened it for, gets before sets, and left back to Step.
+    // ========================================================================
+    for (const auto s : kAllStates) {
+        if (s == State::Step) continue;
+        auto lc = At(s);
+        lc.EnterIntermediateUpdate(true, true);
+        assert(lc.CurrentState() == s);
+    }
+    {
+        auto lc = At(State::Step);
+        lc.EnterIntermediateUpdate(false, true);  // gets only
+        assert(lc.CurrentState() == State::IntermediateUpdate);
+        assert(lc.Allows(LifecycleCall::ReadVariable));
+        assert(lc.Allows(LifecycleCall::OutputDerivatives));
+        assert(!lc.Allows(LifecycleCall::WriteVariable));
+        assert(!lc.Allows(LifecycleCall::DoStep));
+        assert(!lc.Allows(LifecycleCall::StepModeQuery));
+        assert(!lc.Allows(LifecycleCall::FmuStateRead));
+        assert(!lc.Allows(LifecycleCall::EnterEventMode));
+        assert(!lc.Allows(LifecycleCall::Terminate));
+        assert(!lc.Allows(LifecycleCall::Reset));
+        lc.LeaveIntermediateUpdate();
+        assert(lc.CurrentState() == State::Step);
+        assert(lc.Allows(LifecycleCall::DoStep));
+    }
+    {
+        auto lc = At(State::Step);
+        lc.EnterIntermediateUpdate(true, false);  // sets only
+        assert(!lc.Allows(LifecycleCall::ReadVariable));
+        assert(!lc.Allows(LifecycleCall::OutputDerivatives));
+        assert(lc.Allows(LifecycleCall::WriteVariable));
+    }
+    {
+        auto lc = At(State::Step);
+        lc.EnterIntermediateUpdate(true, true);
+        assert(lc.Allows(LifecycleCall::ReadVariable));
+        lc.OnSuccess(LifecycleCall::ReadVariable);
+        assert(lc.Allows(LifecycleCall::WriteVariable));
+        lc.OnSuccess(LifecycleCall::WriteVariable);
+        assert(lc.CurrentState() == State::IntermediateUpdate);
+        assert(!lc.Allows(LifecycleCall::ReadVariable));  // no gets after a set
+        assert(!lc.Allows(LifecycleCall::OutputDerivatives));
+        assert(lc.Allows(LifecycleCall::WriteVariable));
+        lc.LeaveIntermediateUpdate();
+        lc.EnterIntermediateUpdate(true, true);  // a new update starts afresh
+        assert(lc.Allows(LifecycleCall::ReadVariable));
+    }
+    {
+        // A failure in the update stays a failure after it.
+        auto lc = At(State::IntermediateUpdate);
+        lc.Fail();
+        lc.LeaveIntermediateUpdate();
+        assert(lc.CurrentState() == State::Failed);
     }
 
     // -- With Event Mode in use, Initialization leads to Event Mode, and the

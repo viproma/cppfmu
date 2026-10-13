@@ -448,6 +448,62 @@ public:
 
     // The instance is destroyed in fmi3FreeInstance().
     virtual ~SlaveInstance3() CPPFMU_NOEXCEPT;
+
+    /* The importer's answer to an intermediate update. */
+    struct IntermediateUpdateResult
+    {
+        bool earlyReturnRequested = false;
+        FMIReal earlyReturnTime = 0.0;
+    };
+
+    /* What IntermediateUpdate() forwards to. Set by the FMI layer when it
+     * instantiates the slave (and only if the importer provided a callback);
+     * model code does not call this.
+     */
+    using IntermediateUpdateFunction = std::function<IntermediateUpdateResult(
+        FMIReal time,
+        bool variableSetRequested,
+        bool variableGetAllowed,
+        bool stepFinished,
+        bool canReturnEarly)>;
+    void SetIntermediateUpdateFunction(IntermediateUpdateFunction function);
+
+protected:
+    /* True when the importer provided an fmi3IntermediateUpdateCallback, so
+     * that DoStep() may call IntermediateUpdate().
+     */
+    bool IntermediateUpdateAvailable() const CPPFMU_NOEXCEPT;
+
+    /* Enters Intermediate Update Mode from within DoStep(): calls the
+     * importer's fmi3IntermediateUpdateCallback, during which the importer may
+     * call fmi3Get{VariableType} and fmi3GetOutputDerivatives (if
+     * 'variableGetAllowed') and then fmi3Set{VariableType} (if
+     * 'variableSetRequested'), and returns to Step Mode when it returns.
+     * Every other call is refused meanwhile. Which variables the importer may
+     * access is for the slave to enforce: those with intermediateUpdate="true"
+     * that are in requiredIntermediateVariables, and no discrete inputs.
+     *
+     * 'time' must lie in the current step, [currentCommunicationPoint,
+     * currentCommunicationPoint + communicationStepSize], and must not precede
+     * an earlier update of the step with 'stepFinished'. An early return is
+     * reported only if 'canReturnEarly' (the importer's request is ignored
+     * otherwise), and its time lies in the current step.
+     *
+     * Throws std::logic_error when called outside DoStep(), without an
+     * importer callback, or with an invalid time; and std::runtime_error when
+     * the importer asked for an early return outside the step, or a call it
+     * made during the update failed the instance (DoStep() should let that
+     * propagate, so that the step fails).
+     */
+    IntermediateUpdateResult IntermediateUpdate(
+        FMIReal time,
+        bool variableSetRequested,
+        bool variableGetAllowed,
+        bool stepFinished,
+        bool canReturnEarly);
+
+private:
+    IntermediateUpdateFunction intermediateUpdate_;
 };
 
 } // namespace cppfmu

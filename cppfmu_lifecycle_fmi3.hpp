@@ -34,7 +34,8 @@ enum class LifecycleCall
     SnapshotMemory,  // any state, Failed included
     FmuStateRead,    // any state except Failed
     FmuStateRestore, // any state (recovery handled by RestoreFromSnapshot)
-    StepModeQuery,   // Step only (directional/adjoint/output derivatives)
+    StepModeQuery,   // Step only (directional/adjoint derivatives)
+    OutputDerivatives, // Step, and Intermediate Update when gets are allowed
     EvaluateDiscreteStates, // Initialization or Event
     UpdateDiscreteStates,   // Event only
     DoStep                  // Step only
@@ -53,10 +54,12 @@ enum class LifecycleCall
 class Lifecycle
 {
 public:
-    /* The five modes FMI 3.0 Co-Simulation moves an instance through, plus
+    /* The six modes FMI 3.0 Co-Simulation moves an instance through, plus
    * Failed: not a mode of the interface but the state an instance is left in
    * once a call has returned fmi3Error, from which only freeing, resetting
-   * and restoring a saved state escape.
+   * and restoring a saved state escape. IntermediateUpdate is entered only by
+   * the FMU, from within fmi3DoStep, for as long as it is in the importer's
+   * fmi3IntermediateUpdateCallback.
    */
     enum class State
     {
@@ -65,7 +68,8 @@ public:
         Step,
         Event,
         Terminated,
-        Failed
+        Failed,
+        IntermediateUpdate
     };
 
     /* 'eventModeUsed' is the argument of fmi3InstantiateCoSimulation: FMI 3.0
@@ -98,9 +102,27 @@ public:
    */
     void RestoreFromSnapshot() noexcept;
 
+    /* Step -> IntermediateUpdate, around the importer's
+   * fmi3IntermediateUpdateCallback. In it, reading variables and output
+   * derivatives is legal if 'variableGetAllowed' and until the first write;
+   * writing variables if 'variableSetRequested'; nothing else. A no-op
+   * outside Step.
+   */
+    void EnterIntermediateUpdate(
+        bool variableSetRequested,
+        bool variableGetAllowed) noexcept;
+
+    /* IntermediateUpdate -> Step. A no-op from any other state: an instance
+   * that failed during the update stays Failed.
+   */
+    void LeaveIntermediateUpdate() noexcept;
+
 private:
     State m_state;
     bool m_eventModeUsed;
+    bool m_setRequested = false;
+    bool m_getAllowed = false;
+    bool m_setStarted = false;
 };
 
 } // namespace cppfmu
