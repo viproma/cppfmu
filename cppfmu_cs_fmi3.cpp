@@ -6,6 +6,7 @@
 #include "cppfmu_cs_fmi3.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 
 namespace cppfmu
@@ -534,6 +535,40 @@ std::size_t SlaveInstance3::GetNumberOfContinuousStates() const
 SlaveInstance3::~SlaveInstance3() CPPFMU_NOEXCEPT
 {
     // Do nothing
+}
+
+
+void SlaveInstance3::SetIntermediateUpdateFunction(
+    IntermediateUpdateFunction function)
+{
+    intermediateUpdate_ = std::move(function);
+}
+
+
+bool SlaveInstance3::IntermediateUpdateAvailable() const CPPFMU_NOEXCEPT
+{
+    return static_cast<bool>(intermediateUpdate_);
+}
+
+
+SlaveInstance3::IntermediateUpdateResult SlaveInstance3::IntermediateUpdate(
+    FMIReal time,
+    bool variableSetRequested,
+    bool variableGetAllowed,
+    bool stepFinished,
+    bool canReturnEarly)
+{
+    if (!intermediateUpdate_) {
+        throw std::logic_error(
+            "IntermediateUpdate: the importer provided no "
+            "fmi3IntermediateUpdateCallback");
+    }
+    return intermediateUpdate_(
+        time,
+        variableSetRequested,
+        variableGetAllowed,
+        stepFinished,
+        canReturnEarly);
 }
 
 

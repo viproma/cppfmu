@@ -26,6 +26,8 @@ constexpr unsigned kStep = StateBit(State::Step);
 constexpr unsigned kEvent = StateBit(State::Event);
 constexpr unsigned kTerminated = StateBit(State::Terminated);
 constexpr unsigned kFailed = StateBit(State::Failed);
+// Further narrowed by what the FMU allows in the update; see Allows().
+constexpr unsigned kIntermediateUpdate = StateBit(State::IntermediateUpdate);
 
 // A slave is free to build its simulation in ExitInitializationMode and to
 // tear it down in Terminate, so "there is a run" spans Initialization, Step
@@ -75,8 +77,12 @@ constexpr Rule kRules[] = {
      To(State::Instantiated)},
 
     // Non-transitioning calls.
-    {LifecycleCall::ReadVariable, kReadable, kNoTransition},
-    {LifecycleCall::WriteVariable, kWritable, kNoTransition},
+    {LifecycleCall::ReadVariable,
+     kReadable | kIntermediateUpdate,
+     kNoTransition},
+    {LifecycleCall::WriteVariable,
+     kWritable | kIntermediateUpdate,
+     kNoTransition},
     {LifecycleCall::SnapshotMemory,
      kInstantiated | kRunning | kTerminated | kFailed,
      kNoTransition},
@@ -87,6 +93,9 @@ constexpr Rule kRules[] = {
      kInstantiated | kRunning | kTerminated | kFailed,
      kNoTransition},
     {LifecycleCall::StepModeQuery, kStep, kNoTransition},
+    {LifecycleCall::OutputDerivatives,
+     kStep | kIntermediateUpdate,
+     kNoTransition},
     {LifecycleCall::EvaluateDiscreteStates,
      kInitialization | kEvent,
      kNoTransition},
@@ -120,11 +129,24 @@ Lifecycle::State Lifecycle::CurrentState() const noexcept
 
 bool Lifecycle::Allows(LifecycleCall call) const noexcept
 {
-    return (RuleFor(call).legalStates & StateBit(m_state)) != 0u;
+    if ((RuleFor(call).legalStates & StateBit(m_state)) == 0u) {
+        return false;
+    }
+    if (m_state == State::IntermediateUpdate) {
+        // What the FMU opened the update for: first all gets, then the sets
+        // (FMI 3.0, 4.2.5).
+        if (call == LifecycleCall::WriteVariable) return m_setRequested;
+        return m_getAllowed && !m_setStarted;
+    }
+    return true;
 }
 
 void Lifecycle::OnSuccess(LifecycleCall call) noexcept
 {
+    if (m_state == State::IntermediateUpdate) {
+        if (call == LifecycleCall::WriteVariable) m_setStarted = true;
+        return;
+    }
     const auto transition = RuleFor(call).transition;
     if (call == LifecycleCall::ExitInitialization && m_eventModeUsed) {
         // The one transition whose target depends on the instance: with Event
@@ -143,6 +165,24 @@ void Lifecycle::Fail() noexcept
 void Lifecycle::RestoreFromSnapshot() noexcept
 {
     if (m_state == State::Failed) {
+        m_state = State::Step;
+    }
+}
+
+void Lifecycle::EnterIntermediateUpdate(
+    bool variableSetRequested,
+    bool variableGetAllowed) noexcept
+{
+    if (m_state != State::Step) return;
+    m_state = State::IntermediateUpdate;
+    m_setRequested = variableSetRequested;
+    m_getAllowed = variableGetAllowed;
+    m_setStarted = false;
+}
+
+void Lifecycle::LeaveIntermediateUpdate() noexcept
+{
+    if (m_state == State::IntermediateUpdate) {
         m_state = State::Step;
     }
 }

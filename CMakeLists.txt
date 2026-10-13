@@ -114,6 +114,15 @@ if(CPPFMU_FMI_ALL)
     target_compile_features(lifecycle_fmi3_test PRIVATE cxx_std_11)
     target_include_directories(lifecycle_fmi3_test PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME "lifecycle_fmi3_test" COMMAND lifecycle_fmi3_test)
+
+    add_executable(intermediate_update_fmi3_test
+        "tests/intermediate_update_fmi3_test.cpp"
+        "fmi3_functions.cpp"
+    )
+    target_compile_features(intermediate_update_fmi3_test PRIVATE cxx_std_11)
+    target_compile_definitions(intermediate_update_fmi3_test PRIVATE CPPFMU_USE_FMI_3_0)
+    target_link_libraries(intermediate_update_fmi3_test PRIVATE cppfmu)
+    add_test(NAME "intermediate_update_fmi3_test" COMMAND intermediate_update_fmi3_test)
 elseif(CPPFMU_FMI_1)
     add_executable(cs_test
         "tests/cs_test.cpp"
@@ -140,6 +149,15 @@ elseif(CPPFMU_FMI_3)
     target_compile_features(lifecycle_fmi3_test PRIVATE cxx_std_11)
     target_include_directories(lifecycle_fmi3_test PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME "lifecycle_fmi3_test" COMMAND lifecycle_fmi3_test)
+
+    add_executable(intermediate_update_fmi3_test
+        "tests/intermediate_update_fmi3_test.cpp"
+        "fmi3_functions.cpp"
+    )
+    target_compile_features(intermediate_update_fmi3_test PRIVATE cxx_std_11)
+    target_compile_definitions(intermediate_update_fmi3_test PRIVATE CPPFMU_USE_FMI_3_0)
+    target_link_libraries(intermediate_update_fmi3_test PRIVATE cppfmu)
+    add_test(NAME "intermediate_update_fmi3_test" COMMAND intermediate_update_fmi3_test)
 else()
     add_executable(cs_test
         "tests/cs_test.cpp"

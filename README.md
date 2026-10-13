@@ -41,13 +41,25 @@ virtual method are hardcoded stubs that always return `fmi3Error`.
 - Enhanced `DoStep` with early return, event handling, and termination output parameters
 - Event Mode (`EnterEventMode`, `EvaluateDiscreteStates`, `UpdateDiscreteStates`, `EnterStepMode`)
 - `GetNumberOfEventIndicators` / `GetNumberOfContinuousStates`
+- Intermediate Update Mode: when the importer passes an
+  `fmi3IntermediateUpdateCallback`, `DoStep` may call the protected
+  `IntermediateUpdate(time, variableSetRequested, variableGetAllowed,
+  stepFinished, canReturnEarly)` (check `IntermediateUpdateAvailable()` first).
+  While the importer's callback runs, CPPFMU puts the instance in Intermediate
+  Update Mode and lets through only `fmi3Get{VariableType}` and
+  `fmi3GetOutputDerivatives` (if gets are allowed, and only before the first
+  set) and `fmi3Set{VariableType}` (if sets are requested). It returns the
+  importer's early-return request; a call that failed the instance during the
+  update makes `IntermediateUpdate` throw, failing the step. Which variables may
+  be accessed (`intermediateUpdate="true"`, listed in
+  `requiredIntermediateVariables`) is for the slave to check, and the
+  `providesIntermediateUpdate` capability for its model description to declare.
 
 **Genuine stubs (no virtual method — cannot be overridden by users):**
 - **Configuration Mode** — `fmi3EnterConfigurationMode` / `fmi3ExitConfigurationMode`
   (optional feature for structural parameter tuning)
 - **Clock interval/shift** — `Get/SetIntervalDecimal/Fraction`, `Get/SetShiftDecimal/Fraction`
   (optional feature for variable-interval and shifted clocks)
-- **Intermediate Update Callback** — parameter accepted during instantiation but ignored
 
 Debug logging with categories (`fmi3SetDebugLogging`) is handled entirely by the
 C API wrapper, so there is no virtual method for it.
