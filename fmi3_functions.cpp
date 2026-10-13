@@ -42,10 +42,12 @@ struct Component
     Component(
         cppfmu::FMIComponentEnvironment instanceEnvironment,
         fmi3LogMessageCallback logMessage,
-        cppfmu::FMIBoolean loggingOn)
+        cppfmu::FMIBoolean loggingOn,
+        cppfmu::FMIBoolean eventModeUsed)
         : instanceEnvironment{instanceEnvironment}
         , logMessage{logMessage}
         , debugLoggingEnabled{loggingOn == fmi3True}
+        , lifecycle{eventModeUsed == fmi3True}
         , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
     { }
 
@@ -274,7 +276,7 @@ fmi3Instance fmi3InstantiateCoSimulation(
     std::unique_ptr<Component> component;
     try {
         component.reset(
-            new Component(instanceEnvironment, logMessage, loggingOn));
+            new Component(instanceEnvironment, logMessage, loggingOn, eventModeUsed));
 
         auto* comp = component.get();
         auto loggerFn = [comp](

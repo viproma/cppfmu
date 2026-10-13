@@ -4,6 +4,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+// The checks are assert()s: keep them in Release builds, which the conan
+// recipe tests in.
+#undef NDEBUG
+
 /* Exhaustive test of the FMI 3.0 lifecycle transition table.
  *
  * The point of the module is that its rules can be tested without a slave, an
@@ -244,6 +248,25 @@ int main()
         auto lc = At(s);
         lc.RestoreFromSnapshot();
         assert(lc.CurrentState() == s);
+    }
+
+    // -- With Event Mode in use, Initialization leads to Event Mode, and the
+    //    rest of the graph is unchanged. --
+    {
+        Lifecycle lc{true};
+        lc.OnSuccess(LifecycleCall::EnterInitialization);
+        lc.OnSuccess(LifecycleCall::ExitInitialization);
+        assert(lc.CurrentState() == State::Event);
+        assert(lc.Allows(LifecycleCall::UpdateDiscreteStates));
+        assert(!lc.Allows(LifecycleCall::DoStep));
+        lc.OnSuccess(LifecycleCall::EnterStepMode);
+        assert(lc.CurrentState() == State::Step);
+        lc.OnSuccess(LifecycleCall::EnterEventMode);
+        assert(lc.CurrentState() == State::Event);
+        lc.OnSuccess(LifecycleCall::Reset);
+        lc.OnSuccess(LifecycleCall::EnterInitialization);
+        lc.OnSuccess(LifecycleCall::ExitInitialization);
+        assert(lc.CurrentState() == State::Event);
     }
 
     return 0;

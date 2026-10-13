@@ -21,7 +21,7 @@ enum class LifecycleCall
 {
     // Lifecycle transitions -- each moves the instance to a new state.
     EnterInitialization, // Instantiated      -> Initialization
-    ExitInitialization,  // Initialization    -> Step
+    ExitInitialization,  // Initialization    -> Step (Event if eventModeUsed)
     EnterEventMode,      // Step              -> Event
     EnterStepMode,       // Event             -> Step
     Terminate,           // Init/Step/Event   -> Terminated
@@ -68,7 +68,11 @@ public:
         Failed
     };
 
-    Lifecycle() noexcept;
+    /* 'eventModeUsed' is the argument of fmi3InstantiateCoSimulation: FMI 3.0
+   * puts an instance that uses Event Mode in Event Mode, not Step Mode, when
+   * it leaves Initialization Mode.
+   */
+    explicit Lifecycle(bool eventModeUsed = false) noexcept;
 
     State CurrentState() const noexcept;
 
@@ -96,6 +100,7 @@ public:
 
 private:
     State m_state;
+    bool m_eventModeUsed;
 };
 
 } // namespace cppfmu

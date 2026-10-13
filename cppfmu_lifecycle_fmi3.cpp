@@ -65,6 +65,7 @@ constexpr Rule kRules[] = {
     {LifecycleCall::EnterInitialization,
      kInstantiated,
      To(State::Initialization)},
+    // To Event instead when the instance uses Event Mode; see OnSuccess().
     {LifecycleCall::ExitInitialization, kInitialization, To(State::Step)},
     {LifecycleCall::EnterEventMode, kStep, To(State::Event)},
     {LifecycleCall::EnterStepMode, kEvent, To(State::Step)},
@@ -107,8 +108,9 @@ const Rule& RuleFor(LifecycleCall call)
 
 } // namespace
 
-Lifecycle::Lifecycle() noexcept
+Lifecycle::Lifecycle(bool eventModeUsed) noexcept
     : m_state{State::Instantiated}
+    , m_eventModeUsed{eventModeUsed}
 { }
 
 Lifecycle::State Lifecycle::CurrentState() const noexcept
@@ -124,7 +126,11 @@ bool Lifecycle::Allows(LifecycleCall call) const noexcept
 void Lifecycle::OnSuccess(LifecycleCall call) noexcept
 {
     const auto transition = RuleFor(call).transition;
-    if (transition != kNoTransition) {
+    if (call == LifecycleCall::ExitInitialization && m_eventModeUsed) {
+        // The one transition whose target depends on the instance: with Event
+        // Mode in use, Initialization leads to Event Mode (FMI 3.0, 4.2).
+        m_state = State::Event;
+    } else if (transition != kNoTransition) {
         m_state = static_cast<State>(transition);
     }
 }
