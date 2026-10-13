@@ -147,7 +147,8 @@ void SlaveInstance::GetDirectionalDerivative(
     const FMIReal /*dvKnown*/[],
     FMIReal /*dvUnknown*/[]) const
 {
-    throw std::logic_error("Operation not supported: get directional derivative");
+    throw std::logic_error(
+        "Operation not supported: get directional derivative");
 }
 
 
@@ -157,7 +158,8 @@ void SlaveInstance::SetRealInputDerivatives(
     const FMIInteger /*order*/[],
     const FMIReal /*value*/[])
 {
-    throw std::logic_error("Operation not supported: set real input derivatives");
+    throw std::logic_error(
+        "Operation not supported: set real input derivatives");
 }
 
 
@@ -167,7 +169,8 @@ void SlaveInstance::GetRealOutputDerivatives(
     const FMIInteger /*order*/[],
     FMIReal /*value*/[]) const
 {
-    throw std::logic_error("Operation not supported: get real output derivatives");
+    throw std::logic_error(
+        "Operation not supported: get real output derivatives");
 }
 
 
@@ -191,7 +194,8 @@ void SlaveInstance::FreeFMUState(FMIFMUState state)
 
 std::size_t SlaveInstance::SerializedFMUStateSize(FMIFMUState state)
 {
-    throw std::logic_error("Operation not supported: get serialized FMU state size");
+    throw std::logic_error(
+        "Operation not supported: get serialized FMU state size");
 }
 
 
@@ -212,11 +216,10 @@ FMIFMUState SlaveInstance::DeserializeFMUState(
 }
 
 
-
 SlaveInstance::~SlaveInstance() CPPFMU_NOEXCEPT
 {
     // Do nothing
 }
 
 
-} // namespace
+} // namespace cppfmu

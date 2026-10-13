@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  FMI 2.0 model description for the mass-spring-damper example.
+
+  The valueReference of each ScalarVariable matches the VR_* constants in
+  mass_spring_damper.cpp. The modelIdentifier must equal the base name of the
+  built shared library placed under binaries/<platform>/.
+
+  Replace the guid below with a freshly generated UUID for a real model.
+-->
+<fmiModelDescription
+    fmiVersion="2.0"
+    modelName="MassSpringDamper"
+    guid="{d3c0ffee-2000-4a2e-9b0d-000000000002}"
+    description="Mass-spring-damper driven by an external force (cppfmu example)"
+    generationTool="cppfmu"
+    variableNamingConvention="structured">
+
+    <CoSimulation
+        modelIdentifier="MassSpringDamper"
+        canHandleVariableCommunicationStepSize="true"
+        canGetAndSetFMUstate="false"
+        canSerializeFMUstate="false"/>
+
+    <ModelVariables>
+        <!-- Parameters -->
+        <ScalarVariable name="mass" valueReference="0" causality="parameter"
+            variability="fixed" description="Mass m [kg]">
+            <Real start="1.0"/>
+        </ScalarVariable>
+        <ScalarVariable name="stiffness" valueReference="1" causality="parameter"
+            variability="fixed" description="Spring stiffness k [N/m]">
+            <Real start="10.0"/>
+        </ScalarVariable>
+        <ScalarVariable name="damping" valueReference="2" causality="parameter"
+            variability="fixed" description="Damping coefficient c [N*s/m]">
+            <Real start="0.5"/>
+        </ScalarVariable>
+
+        <!-- Input -->
+        <ScalarVariable name="force" valueReference="3" causality="input"
+            variability="continuous" description="External force F [N]">
+            <Real start="0.0"/>
+        </ScalarVariable>
+
+        <!-- Outputs -->
+        <ScalarVariable name="position" valueReference="4" causality="output"
+            variability="continuous" initial="exact" description="Position x [m]">
+            <Real start="0.0"/>
+        </ScalarVariable>
+        <ScalarVariable name="velocity" valueReference="5" causality="output"
+            variability="continuous" initial="exact" description="Velocity v [m/s]">
+            <Real start="0.0"/>
+        </ScalarVariable>
+    </ModelVariables>
+
+    <ModelStructure>
+        <Outputs>
+            <Unknown index="5"/>
+            <Unknown index="6"/>
+        </Outputs>
+    </ModelStructure>
+</fmiModelDescription>

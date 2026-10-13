@@ -5,71 +5,118 @@
  */
 #include <exception>
 #include <limits>
+#include <string>
 
 #include "cppfmu_cs.hpp"
 
-
 namespace
 {
-    // A struct that holds all the data for one model instance.
-    struct Component
-    {
-        Component(
-            cppfmu::FMIString instanceName,
-            cppfmu::FMICallbackFunctions callbackFunctions,
-            cppfmu::FMIBoolean loggingOn)
-            : memory{callbackFunctions}
-            , loggerSettings{std::make_shared<cppfmu::Logger::Settings>(memory)}
+// A struct that holds all the data for one model instance.
+struct Component
+{
+    Component(
+        cppfmu::FMIString instanceName,
+        cppfmu::FMICallbackFunctions callbackFunctions,
+        cppfmu::FMIBoolean loggingOn)
+        : memory{callbackFunctions}
+        , loggerSettings{std::make_shared<cppfmu::Logger::Settings>(memory)}
 #ifdef CPPFMU_USE_FMI_1_0
-            , logger{this, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
+        , logger{this, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
 #else
-            , logger{callbackFunctions.componentEnvironment, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
+        , logger{callbackFunctions.componentEnvironment, cppfmu::CopyString(memory, instanceName), callbackFunctions, loggerSettings}
 #endif
-            , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
-        {
-            loggerSettings->debugLoggingEnabled = (loggingOn == cppfmu::FMITrue);
-        }
+        , lastSuccessfulTime{std::numeric_limits<cppfmu::FMIReal>::quiet_NaN()}
+    {
+        loggerSettings->debugLoggingEnabled = (loggingOn == cppfmu::FMITrue);
+    }
 
-        // General
-        cppfmu::Memory memory;
-        std::shared_ptr<cppfmu::Logger::Settings> loggerSettings;
-        cppfmu::Logger logger;
+    // General
+    cppfmu::Memory memory;
+    std::shared_ptr<cppfmu::Logger::Settings> loggerSettings;
+    cppfmu::Logger logger;
 
-        // Co-simulation
-        cppfmu::UniquePtr<cppfmu::SlaveInstance> slave;
-        cppfmu::FMIReal lastSuccessfulTime;
-    };
+    // Co-simulation
+    cppfmu::UniquePtr<cppfmu::SlaveInstance> slave;
+    cppfmu::FMIReal lastSuccessfulTime;
+};
+
+// Runs one call on the slave behind the component handle, translating any
+// exception into the matching FMI status code and logging its message.
+//
+// Centralises the cast, null-check, try/catch and logging that every
+// uniform slave-delegating entry point would otherwise repeat.  Mirrors
+// RunLegalCall() in fmi3_functions.cpp, minus the lifecycle state guard,
+// which FMI 1.0/2.0 do not model.  A cppfmu::FatalError becomes FMIFatal;
+// any other std::exception, or a throw carrying no std::exception, becomes
+// FMIError instead of escaping across the C linkage boundary.
+template<typename Operation>
+cppfmu::FMIStatus RunCall(
+    cppfmu::FMIComponent c,
+    const char* functionName,
+    Operation operation)
+{
+    const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) {
+        return cppfmu::FMIError;
+    }
+    try {
+        operation(*component->slave);
+        return cppfmu::FMIOK;
+    } catch (const cppfmu::FatalError& e) {
+        component->logger.Log(
+            cppfmu::FMIFatal,
+            "cppfmu",
+            (std::string(functionName) + ": " + e.what()).c_str());
+        return cppfmu::FMIFatal;
+    } catch (const std::exception& e) {
+        component->logger.Log(
+            cppfmu::FMIError,
+            "cppfmu",
+            (std::string(functionName) + ": " + e.what()).c_str());
+        return cppfmu::FMIError;
+    } catch (...) {
+        component->logger.Log(
+            cppfmu::FMIError,
+            "cppfmu",
+            (std::string(functionName) + ": exception carrying no message")
+                .c_str());
+        return cppfmu::FMIError;
+    }
 }
-
+} // namespace
 
 // FMI functions
 extern "C"
 {
-
 #ifdef CPPFMU_USE_FMI_1_0
 // =============================================================================
 // FMI 1.0 functions
 // =============================================================================
 
-const char* fmiGetTypesPlatform() { return fmiPlatform; }
+const char* fmiGetTypesPlatform()
+{
+    return fmiPlatform;
+}
 
-
-const char* fmiGetVersion() { return fmiVersion; }
-
+const char* fmiGetVersion()
+{
+    return fmiVersion;
+}
 
 fmiComponent fmiInstantiateSlave(
-    fmiString  instanceName,
-    fmiString  fmuGUID,
-    fmiString  fmuLocation,
-    fmiString  mimeType,
-    fmiReal    timeout,
+    fmiString instanceName,
+    fmiString fmuGUID,
+    fmiString fmuLocation,
+    fmiString mimeType,
+    fmiReal timeout,
     fmiBoolean visible,
     fmiBoolean interactive,
     fmiCallbackFunctions functions,
     fmiBoolean loggingOn)
 {
     try {
-        auto component = cppfmu::AllocateUnique<Component>(cppfmu::Memory{functions},
+        auto component = cppfmu::AllocateUnique<Component>(
+            cppfmu::Memory{functions},
             instanceName,
             functions,
             loggingOn);
@@ -93,7 +140,6 @@ fmiComponent fmiInstantiateSlave(
     }
 }
 
-
 void fmiFreeSlaveInstance(fmiComponent c)
 {
     const auto component = reinterpret_cast<Component*>(c);
@@ -103,74 +149,39 @@ void fmiFreeSlaveInstance(fmiComponent c)
     cppfmu::Delete(component->memory, component);
 }
 
-
 fmiStatus fmiInitializeSlave(
     fmiComponent c,
-    fmiReal      tStart,
-    fmiBoolean   stopTimeDefined,
-    fmiReal      tStop)
+    fmiReal tStart,
+    fmiBoolean stopTimeDefined,
+    fmiReal tStop)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetupExperiment(
-            fmiFalse,
-            0.0,
-            tStart,
-            stopTimeDefined,
-            tStop);
-        component->slave->EnterInitializationMode();
-        component->slave->ExitInitializationMode();
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiInitializeSlave", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetupExperiment(fmiFalse, 0.0, tStart, stopTimeDefined, tStop);
+        slave.EnterInitializationMode();
+        slave.ExitInitializationMode();
+    });
 }
-
 
 fmiStatus fmiResetSlave(fmiComponent c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->Reset();
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiResetSlave", [&](cppfmu::SlaveInstance& slave) {
+        slave.Reset();
+    });
 }
-
 
 fmiStatus fmiTerminateSlave(fmiComponent c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->Terminate();
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiTerminateSlave", [&](cppfmu::SlaveInstance& slave) {
+        slave.Terminate();
+    });
 }
 
-
-fmiStatus fmiSetDebugLogging(
-    fmiComponent c,
-    fmiBoolean loggingOn)
+fmiStatus fmiSetDebugLogging(fmiComponent c, fmiBoolean loggingOn)
 {
-    reinterpret_cast<Component*>(c)->loggerSettings->debugLoggingEnabled = (loggingOn == fmiTrue);
+    reinterpret_cast<Component*>(c)->loggerSettings->debugLoggingEnabled =
+        (loggingOn == fmiTrue);
     return fmiOK;
 }
-
 
 fmiStatus fmiGetReal(
     fmiComponent c,
@@ -178,17 +189,9 @@ fmiStatus fmiGetReal(
     size_t nvr,
     fmiReal value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetReal(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiGetReal", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetReal(vr, nvr, value);
+    });
 }
 
 fmiStatus fmiGetInteger(
@@ -197,17 +200,9 @@ fmiStatus fmiGetInteger(
     size_t nvr,
     fmiInteger value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetInteger(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiGetInteger", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetInteger(vr, nvr, value);
+    });
 }
 
 fmiStatus fmiGetBoolean(
@@ -216,17 +211,9 @@ fmiStatus fmiGetBoolean(
     size_t nvr,
     fmiBoolean value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetBoolean(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiGetBoolean", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetBoolean(vr, nvr, value);
+    });
 }
 
 fmiStatus fmiGetString(
@@ -235,19 +222,10 @@ fmiStatus fmiGetString(
     size_t nvr,
     fmiString value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetString(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiGetString", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetString(vr, nvr, value);
+    });
 }
-
 
 fmiStatus fmiSetReal(
     fmiComponent c,
@@ -255,17 +233,9 @@ fmiStatus fmiSetReal(
     size_t nvr,
     const fmiReal value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetReal(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiSetReal", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetReal(vr, nvr, value);
+    });
 }
 
 fmiStatus fmiSetInteger(
@@ -274,93 +244,62 @@ fmiStatus fmiSetInteger(
     size_t nvr,
     const fmiInteger value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetInteger(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiSetInteger", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetInteger(vr, nvr, value);
+    });
 }
 
-fmiStatus fmiSetBoolean (fmiComponent c, const fmiValueReference vr[], size_t nvr, const fmiBoolean value[])
+fmiStatus fmiSetBoolean(
+    fmiComponent c,
+    const fmiValueReference vr[],
+    size_t nvr,
+    const fmiBoolean value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetBoolean(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiSetBoolean", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetBoolean(vr, nvr, value);
+    });
 }
 
-fmiStatus fmiSetString  (fmiComponent c, const fmiValueReference vr[], size_t nvr, const fmiString  value[])
+fmiStatus fmiSetString(
+    fmiComponent c,
+    const fmiValueReference vr[],
+    size_t nvr,
+    const fmiString value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetString(vr, nvr, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(c, "fmiSetString", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetString(vr, nvr, value);
+    });
 }
-
-
 
 fmiStatus fmiSetRealInputDerivatives(
     fmiComponent c,
-    const  fmiValueReference vr[],
+    const fmiValueReference vr[],
     size_t nvr,
-    const  fmiInteger order[],
-    const  fmiReal value[])
+    const fmiInteger order[],
+    const fmiReal value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetRealInputDerivatives(vr, nvr, order, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(
+        c,
+        "fmiSetRealInputDerivatives",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.SetRealInputDerivatives(vr, nvr, order, value);
+        });
 }
-
 
 fmiStatus fmiGetRealOutputDerivatives(
     fmiComponent c,
-    const   fmiValueReference vr[],
-    size_t  nvr,
-    const   fmiInteger order[],
+    const fmiValueReference vr[],
+    size_t nvr,
+    const fmiInteger order[],
     fmiReal value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetRealOutputDerivatives(vr, nvr, order, value);
-        return fmiOK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
-        return fmiFatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
-        return fmiError;
-    }
+    return RunCall(
+        c,
+        "fmiGetRealOutputDerivatives",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.GetRealOutputDerivatives(vr, nvr, order, value);
+        });
 }
-
-
 
 fmiStatus fmiCancelStep(fmiComponent c)
 {
@@ -371,12 +310,11 @@ fmiStatus fmiCancelStep(fmiComponent c)
     return fmiError;
 }
 
-
 fmiStatus fmiDoStep(
     fmiComponent c,
-    fmiReal      currentCommunicationPoint,
-    fmiReal      communicationStepSize,
-    fmiBoolean   newStep)
+    fmiReal currentCommunicationPoint,
+    fmiReal communicationStepSize,
+    fmiBoolean newStep)
 {
     const auto component = reinterpret_cast<Component*>(c);
     try {
@@ -403,7 +341,6 @@ fmiStatus fmiDoStep(
     }
 }
 
-
 fmiStatus fmiGetStatus(
     fmiComponent c,
     const fmiStatusKind /*s*/,
@@ -415,8 +352,6 @@ fmiStatus fmiGetStatus(
         "FMI function not supported: fmiGetStatus");
     return fmiError;
 }
-
-
 
 fmiStatus fmiGetRealStatus(
     fmiComponent c,
@@ -432,10 +367,9 @@ fmiStatus fmiGetRealStatus(
             fmiError,
             "cppfmu",
             "Invalid status inquiry for fmiGetRealStatus");
-       return fmiError;
+        return fmiError;
     }
 }
-
 
 fmiStatus fmiGetIntegerStatus(
     fmiComponent c,
@@ -449,8 +383,6 @@ fmiStatus fmiGetIntegerStatus(
     return fmiError;
 }
 
-
-
 fmiStatus fmiGetBooleanStatus(
     fmiComponent c,
     const fmiStatusKind /*s*/,
@@ -463,11 +395,10 @@ fmiStatus fmiGetBooleanStatus(
     return fmiError;
 }
 
-
 fmiStatus fmiGetStringStatus(
     fmiComponent c,
     const fmiStatusKind /*s*/,
-    fmiString*  /*value*/)
+    fmiString* /*value*/)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
@@ -476,25 +407,21 @@ fmiStatus fmiGetStringStatus(
     return fmiError;
 }
 
-
 #else // CPPFMU_USE_FMI_1_0 not defined
 
 // =============================================================================
 // FMI 2.0 functions
 // =============================================================================
 
-
 const char* fmi2GetTypesPlatform()
 {
     return fmi2TypesPlatform;
 }
 
-
 const char* fmi2GetVersion()
 {
     return "2.0";
 }
-
 
 fmi2Component fmi2Instantiate(
     fmi2String instanceName,
@@ -507,9 +434,12 @@ fmi2Component fmi2Instantiate(
 {
     try {
         if (fmuType != fmi2CoSimulation) {
-            throw std::logic_error("Unsupported FMU instance type requested (only co-simulation is supported)");
+            throw std::logic_error(
+                "Unsupported FMU instance type requested (only "
+                "co-simulation is supported)");
         }
-        auto component = cppfmu::AllocateUnique<Component>(cppfmu::Memory{*functions},
+        auto component = cppfmu::AllocateUnique<Component>(
+            cppfmu::Memory{*functions},
             instanceName,
             *functions,
             loggingOn);
@@ -533,7 +463,6 @@ fmi2Component fmi2Instantiate(
     }
 }
 
-
 void fmi2FreeInstance(fmi2Component c)
 {
     const auto component = reinterpret_cast<Component*>(c);
@@ -543,7 +472,6 @@ void fmi2FreeInstance(fmi2Component c)
     cppfmu::Delete(component->memory, component);
 }
 
-
 fmi2Status fmi2SetDebugLogging(
     fmi2Component c,
     fmi2Boolean loggingOn,
@@ -552,10 +480,11 @@ fmi2Status fmi2SetDebugLogging(
 {
     const auto component = reinterpret_cast<Component*>(c);
 
-    std::vector<cppfmu::String, cppfmu::Allocator<cppfmu::String>> newCategories(
-            cppfmu::Allocator<cppfmu::String>(component->memory));
+    std::vector<cppfmu::String, cppfmu::Allocator<cppfmu::String>>
+        newCategories(cppfmu::Allocator<cppfmu::String>(component->memory));
     for (size_t i = 0; i < nCategories; ++i) {
-        newCategories.push_back(cppfmu::CopyString(component->memory, categories[i]));
+        newCategories.push_back(
+            cppfmu::CopyString(component->memory, categories[i]));
     }
 
     component->loggerSettings->debugLoggingEnabled = (loggingOn == fmi2True);
@@ -563,97 +492,53 @@ fmi2Status fmi2SetDebugLogging(
     return fmi2OK;
 }
 
-
 fmi2Status fmi2SetupExperiment(
     fmi2Component c,
-    fmi2Boolean   toleranceDefined,
-    fmi2Real      tolerance,
-    fmi2Real      startTime,
-    fmi2Boolean   stopTimeDefined,
-    fmi2Real      stopTime)
+    fmi2Boolean toleranceDefined,
+    fmi2Real tolerance,
+    fmi2Real startTime,
+    fmi2Boolean stopTimeDefined,
+    fmi2Real stopTime)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetupExperiment(
+    return RunCall(c, "fmi2SetupExperiment", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetupExperiment(
             toleranceDefined,
             tolerance,
             startTime,
             stopTimeDefined,
             stopTime);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    });
 }
-
 
 fmi2Status fmi2EnterInitializationMode(fmi2Component c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->EnterInitializationMode();
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2EnterInitializationMode",
+        [&](cppfmu::SlaveInstance& slave) { slave.EnterInitializationMode(); });
 }
-
 
 fmi2Status fmi2ExitInitializationMode(fmi2Component c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->ExitInitializationMode();
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2ExitInitializationMode",
+        [&](cppfmu::SlaveInstance& slave) { slave.ExitInitializationMode(); });
 }
-
 
 fmi2Status fmi2Terminate(fmi2Component c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->Terminate();
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2Terminate", [&](cppfmu::SlaveInstance& slave) {
+        slave.Terminate();
+    });
 }
-
 
 fmi2Status fmi2Reset(fmi2Component c)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->Reset();
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2Reset", [&](cppfmu::SlaveInstance& slave) {
+        slave.Reset();
+    });
 }
-
 
 fmi2Status fmi2GetReal(
     fmi2Component c,
@@ -661,17 +546,9 @@ fmi2Status fmi2GetReal(
     size_t nvr,
     fmi2Real value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetReal(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2GetReal", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetReal(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2GetInteger(
@@ -680,17 +557,9 @@ fmi2Status fmi2GetInteger(
     size_t nvr,
     fmi2Integer value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetInteger(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2GetInteger", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetInteger(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2GetBoolean(
@@ -699,17 +568,9 @@ fmi2Status fmi2GetBoolean(
     size_t nvr,
     fmi2Boolean value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetBoolean(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2GetBoolean", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetBoolean(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2GetString(
@@ -718,19 +579,10 @@ fmi2Status fmi2GetString(
     size_t nvr,
     fmi2String value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetString(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2GetString", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetString(vr, nvr, value);
+    });
 }
-
 
 fmi2Status fmi2SetReal(
     fmi2Component c,
@@ -738,17 +590,9 @@ fmi2Status fmi2SetReal(
     size_t nvr,
     const fmi2Real value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetReal(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2SetReal", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetReal(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2SetInteger(
@@ -757,17 +601,9 @@ fmi2Status fmi2SetInteger(
     size_t nvr,
     const fmi2Integer value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetInteger(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2SetInteger", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetInteger(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2SetBoolean(
@@ -776,17 +612,9 @@ fmi2Status fmi2SetBoolean(
     size_t nvr,
     const fmi2Boolean value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetBoolean(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2SetBoolean", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetBoolean(vr, nvr, value);
+    });
 }
 
 fmi2Status fmi2SetString(
@@ -795,71 +623,32 @@ fmi2Status fmi2SetString(
     size_t nvr,
     const fmi2String value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetString(vr, nvr, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2SetString", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetString(vr, nvr, value);
+    });
 }
 
-
-fmi2Status fmi2GetFMUstate(
-    fmi2Component c,
-    fmi2FMUstate* state)
+fmi2Status fmi2GetFMUstate(fmi2Component c, fmi2FMUstate* state)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetFMUState(state);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2GetFMUstate", [&](cppfmu::SlaveInstance& slave) {
+        slave.GetFMUState(state);
+    });
 }
 
-fmi2Status fmi2SetFMUstate(
-    fmi2Component c,
-    fmi2FMUstate state)
+fmi2Status fmi2SetFMUstate(fmi2Component c, fmi2FMUstate state)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetFMUState(state);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(c, "fmi2SetFMUstate", [&](cppfmu::SlaveInstance& slave) {
+        slave.SetFMUState(state);
+    });
 }
 
-fmi2Status fmi2FreeFMUstate(
-    fmi2Component c,
-    fmi2FMUstate* state)
+fmi2Status fmi2FreeFMUstate(fmi2Component c, fmi2FMUstate* state)
 {
     if (state == nullptr) return fmi2OK;
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->FreeFMUState(*state);
+    return RunCall(c, "fmi2FreeFMUstate", [&](cppfmu::SlaveInstance& slave) {
+        slave.FreeFMUState(*state);
         *state = nullptr;
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    });
 }
 
 fmi2Status fmi2SerializedFMUstateSize(
@@ -867,17 +656,12 @@ fmi2Status fmi2SerializedFMUstateSize(
     fmi2FMUstate state,
     size_t* size)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        *size = component->slave->SerializedFMUStateSize(state);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2SerializedFMUstateSize",
+        [&](cppfmu::SlaveInstance& slave) {
+            *size = slave.SerializedFMUStateSize(state);
+        });
 }
 
 fmi2Status fmi2SerializeFMUstate(
@@ -886,17 +670,12 @@ fmi2Status fmi2SerializeFMUstate(
     fmi2Byte data[],
     size_t size)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SerializeFMUState(state, data, size);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2SerializeFMUstate",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.SerializeFMUState(state, data, size);
+        });
 }
 
 fmi2Status fmi2DeSerializeFMUstate(
@@ -905,19 +684,13 @@ fmi2Status fmi2DeSerializeFMUstate(
     size_t size,
     fmi2FMUstate* state)
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        *state = component->slave->DeserializeFMUState(data, size);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2DeSerializeFMUstate",
+        [&](cppfmu::SlaveInstance& slave) {
+            *state = slave.DeserializeFMUState(data, size);
+        });
 }
-
 
 fmi2Status fmi2GetDirectionalDerivative(
     fmi2Component c,
@@ -928,20 +701,18 @@ fmi2Status fmi2GetDirectionalDerivative(
     const fmi2Real dvKnown[],
     fmi2Real dvUnknown[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetDirectionalDerivative(
-            vUnknown_ref, nUnknown,
-            vKnown_ref, nKnown,
-            dvKnown, dvUnknown);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2GetDirectionalDerivative",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.GetDirectionalDerivative(
+                vUnknown_ref,
+                nUnknown,
+                vKnown_ref,
+                nKnown,
+                dvKnown,
+                dvUnknown);
+        });
 }
 
 fmi2Status fmi2SetRealInputDerivatives(
@@ -951,17 +722,12 @@ fmi2Status fmi2SetRealInputDerivatives(
     const fmi2Integer order[],
     const fmi2Real value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->SetRealInputDerivatives(vr, nvr, order, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2SetRealInputDerivatives",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.SetRealInputDerivatives(vr, nvr, order, value);
+        });
 }
 
 fmi2Status fmi2GetRealOutputDerivatives(
@@ -971,17 +737,12 @@ fmi2Status fmi2GetRealOutputDerivatives(
     const fmi2Integer order[],
     fmi2Real value[])
 {
-    const auto component = reinterpret_cast<Component*>(c);
-    try {
-        component->slave->GetRealOutputDerivatives(vr, nvr, order, value);
-        return fmi2OK;
-    } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
-        return fmi2Fatal;
-    } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
-        return fmi2Error;
-    }
+    return RunCall(
+        c,
+        "fmi2GetRealOutputDerivatives",
+        [&](cppfmu::SlaveInstance& slave) {
+            slave.GetRealOutputDerivatives(vr, nvr, order, value);
+        });
 }
 
 fmi2Status fmi2DoStep(
@@ -1024,12 +785,8 @@ fmi2Status fmi2CancelStep(fmi2Component c)
     return fmi2Error;
 }
 
-
 /* Inquire slave status */
-fmi2Status fmi2GetStatus(
-    fmi2Component c,
-    const fmi2StatusKind,
-    fmi2Status*)
+fmi2Status fmi2GetStatus(fmi2Component c, const fmi2StatusKind, fmi2Status*)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmi2Error,
@@ -1052,7 +809,7 @@ fmi2Status fmi2GetRealStatus(
             fmi2Error,
             "cppfmu",
             "Invalid status inquiry for fmi2GetRealStatus");
-       return fmi2Error;
+        return fmi2Error;
     }
 }
 
@@ -1091,7 +848,6 @@ fmi2Status fmi2GetStringStatus(
         "FMI function not supported: fmi2GetStringStatus");
     return fmi2Error;
 }
-
 
 #endif // CPPFMU_USE_FMI_1_0
 }

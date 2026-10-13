@@ -1,4 +1,4 @@
-/* Copyright 2016-2019, SINTEF Ocean.
+/* Copyright 2016-2026, SINTEF Ocean.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -6,20 +6,22 @@
 #ifndef CPPFMU_COMMON_HPP
 #define CPPFMU_COMMON_HPP
 
-#include <algorithm>    // std::find()
-#include <cstddef>      // std::size_t
-#include <functional>   // std::function
-#include <memory>       // std::shared_ptr, std::unique_ptr
-#include <new>          // std::bad_alloc
-#include <stdexcept>    // std::runtime_error
-#include <string>       // std::basic_string, std::char_traits
-#include <utility>      // std::forward
-#include <vector>		// std::vector
+#include <algorithm>  // std::find()
+#include <cstddef>    // std::size_t
+#include <functional> // std::function
+#include <memory>     // std::shared_ptr, std::unique_ptr
+#include <new>        // std::bad_alloc
+#include <stdexcept>  // std::runtime_error
+#include <string>     // std::basic_string, std::char_traits
+#include <utility>    // std::forward
+#include <vector>     // std::vector
 
 extern "C"
 {
 #ifdef CPPFMU_USE_FMI_1_0
 #   include <fmiFunctions.h>
+#elif defined(CPPFMU_USE_FMI_3_0)
+#   include <fmi3Functions.h>
 #else
 #   include <fmi2Functions.h>
 #endif
@@ -39,55 +41,89 @@ namespace cppfmu
 
 // Aliases for FMI types and enums
 #ifdef CPPFMU_USE_FMI_1_0
-    typedef fmiReal FMIReal;
-    typedef fmiInteger FMIInteger;
-    typedef fmiBoolean FMIBoolean;
-    typedef fmiString FMIString;
-    typedef char FMIByte; // doesn't exist in FMI 1
-    typedef fmiCallbackFunctions FMICallbackFunctions;
-    typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
-    typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
-    typedef fmiCallbackLogger FMICallbackLogger;
-    typedef fmiComponent FMIComponent;
-    typedef fmiComponent FMIComponentEnvironment;
-    typedef fmiStatus FMIStatus;
-    typedef void* FMIFMUState; // doesn't exist in FMI 1
-    typedef fmiValueReference FMIValueReference;
+typedef fmiReal FMIReal;
+typedef fmiInteger FMIInteger;
+typedef fmiBoolean FMIBoolean;
+typedef fmiString FMIString;
+typedef char FMIByte; // doesn't exist in FMI 1
+typedef fmiCallbackFunctions FMICallbackFunctions;
+typedef fmiCallbackAllocateMemory FMICallbackAllocateMemory;
+typedef fmiCallbackFreeMemory FMICallbackFreeMemory;
+typedef fmiCallbackLogger FMICallbackLogger;
+typedef fmiComponent FMIComponent;
+typedef fmiComponent FMIComponentEnvironment;
+typedef fmiStatus FMIStatus;
+typedef void* FMIFMUState; // doesn't exist in FMI 1
+typedef fmiValueReference FMIValueReference;
 
-    const FMIBoolean FMIFalse = fmiFalse;
-    const FMIBoolean FMITrue = fmiTrue;
+const FMIBoolean FMIFalse = fmiFalse;
+const FMIBoolean FMITrue = fmiTrue;
 
-    const FMIStatus FMIOK = fmiOK;
-    const FMIStatus FMIWarning = fmiWarning;
-    const FMIStatus FMIDiscard = fmiDiscard;
-    const FMIStatus FMIError = fmiError;
-    const FMIStatus FMIFatal = fmiFatal;
-    const FMIStatus FMIPending = fmiPending;
+const FMIStatus FMIOK = fmiOK;
+const FMIStatus FMIWarning = fmiWarning;
+const FMIStatus FMIDiscard = fmiDiscard;
+const FMIStatus FMIError = fmiError;
+const FMIStatus FMIFatal = fmiFatal;
+const FMIStatus FMIPending = fmiPending;
+#elif defined(CPPFMU_USE_FMI_3_0)
+typedef fmi3Float64 FMIReal;
+typedef fmi3Float32 FMIFloat32;
+typedef fmi3Int32 FMIInteger;
+typedef fmi3Int8 FMIInt8;
+typedef fmi3UInt8 FMIUInt8;
+typedef fmi3Int16 FMIInt16;
+typedef fmi3UInt16 FMIUInt16;
+typedef fmi3Int64 FMIInt64;
+typedef fmi3UInt64 FMIUInt64;
+typedef fmi3UInt32 FMIUInt32;
+typedef fmi3Boolean FMIBoolean;
+typedef fmi3String FMIString;
+typedef fmi3Byte FMIByte;
+typedef fmi3Binary FMIBinary;
+typedef fmi3Clock FMIClock;
+typedef fmi3Instance FMIComponent;
+typedef fmi3InstanceEnvironment FMIComponentEnvironment;
+typedef fmi3FMUState FMIFMUState;
+typedef fmi3Status FMIStatus;
+typedef fmi3ValueReference FMIValueReference;
+typedef fmi3DependencyKind FMIDependencyKind;
+
+const FMIBoolean FMIFalse = fmi3False;
+const FMIBoolean FMITrue = fmi3True;
+
+const FMIStatus FMIOK = fmi3OK;
+const FMIStatus FMIWarning = fmi3Warning;
+const FMIStatus FMIDiscard = fmi3Discard;
+const FMIStatus FMIError = fmi3Error;
+const FMIStatus FMIFatal = fmi3Fatal;
+// FMI 3.0 has no native "pending" status. Keep FMIPending as a distinct
+// sentinel value so generic code can still distinguish it from warnings.
+const FMIStatus FMIPending = static_cast<FMIStatus>(-1);
 #else
-    typedef fmi2Real FMIReal;
-    typedef fmi2Integer FMIInteger;
-    typedef fmi2Boolean FMIBoolean;
-    typedef fmi2String FMIString;
-    typedef fmi2Byte FMIByte;
-    typedef fmi2CallbackFunctions FMICallbackFunctions;
-    typedef fmi2CallbackAllocateMemory FMICallbackAllocateMemory;
-    typedef fmi2CallbackFreeMemory FMICallbackFreeMemory;
-    typedef fmi2CallbackLogger FMICallbackLogger;
-    typedef fmi2Component FMIComponent;
-    typedef fmi2ComponentEnvironment FMIComponentEnvironment;
-    typedef fmi2FMUstate FMIFMUState;
-    typedef fmi2Status FMIStatus;
-    typedef fmi2ValueReference FMIValueReference;
+typedef fmi2Real FMIReal;
+typedef fmi2Integer FMIInteger;
+typedef fmi2Boolean FMIBoolean;
+typedef fmi2String FMIString;
+typedef fmi2Byte FMIByte;
+typedef fmi2CallbackFunctions FMICallbackFunctions;
+typedef fmi2CallbackAllocateMemory FMICallbackAllocateMemory;
+typedef fmi2CallbackFreeMemory FMICallbackFreeMemory;
+typedef fmi2CallbackLogger FMICallbackLogger;
+typedef fmi2Component FMIComponent;
+typedef fmi2ComponentEnvironment FMIComponentEnvironment;
+typedef fmi2FMUstate FMIFMUState;
+typedef fmi2Status FMIStatus;
+typedef fmi2ValueReference FMIValueReference;
 
-    const FMIBoolean FMIFalse = fmi2False;
-    const FMIBoolean FMITrue = fmi2True;
+const FMIBoolean FMIFalse = fmi2False;
+const FMIBoolean FMITrue = fmi2True;
 
-    const FMIStatus FMIOK = fmi2OK;
-    const FMIStatus FMIWarning = fmi2Warning;
-    const FMIStatus FMIDiscard = fmi2Discard;
-    const FMIStatus FMIError = fmi2Error;
-    const FMIStatus FMIFatal = fmi2Fatal;
-    const FMIStatus FMIPending = fmi2Pending;
+const FMIStatus FMIOK = fmi2OK;
+const FMIStatus FMIWarning = fmi2Warning;
+const FMIStatus FMIDiscard = fmi2Discard;
+const FMIStatus FMIError = fmi2Error;
+const FMIStatus FMIFatal = fmi2Fatal;
+const FMIStatus FMIPending = fmi2Pending;
 #endif
 
 
@@ -107,6 +143,80 @@ public:
 };
 
 
+/* An alias for a std::unique_ptr specialisation where the deleter is general
+ * and independent of the type of the object pointed to.
+ */
+template<typename T>
+using UniquePtr = std::unique_ptr<T, std::function<void(void*)>>;
+
+
+#ifdef CPPFMU_USE_FMI_3_0
+// ============================================================================
+// FMI 3.0 LOGGING
+// ============================================================================
+
+namespace detail
+{
+template<typename Container, typename Item>
+bool CanFind(const Container& container, const Item& item)
+{
+    return container.end() !=
+        std::find(container.begin(), container.end(), item);
+}
+} // namespace detail
+
+
+/* A class that can be used to log messages from FMI 3.0 model code.
+ * All messages are forwarded to the simulation environment's logging callback.
+ */
+class Logger3
+{
+public:
+    struct Settings
+    {
+        Settings() = default;
+
+        bool debugLoggingEnabled = false;
+        std::vector<std::string> loggedCategories;
+    };
+
+    Logger3(
+        FMIComponentEnvironment component,
+        fmi3LogMessageCallback logMessage,
+        std::shared_ptr<Settings> settings)
+        : m_component{component}
+        , m_fmiLogger{logMessage}
+        , m_settings{settings}
+    { }
+
+    void Log(FMIStatus status, FMIString category, FMIString message) const
+    {
+        if (m_settings->loggedCategories.empty() ||
+            detail::CanFind(
+                m_settings->loggedCategories,
+                std::string(category))) {
+            if (m_fmiLogger) {
+                m_fmiLogger(m_component, status, category, message);
+            }
+        }
+    }
+
+    void DebugLog(FMIStatus status, FMIString category, FMIString message) const
+    {
+        if (m_settings->debugLoggingEnabled) {
+            Log(status, category, message);
+        }
+    }
+
+private:
+    const FMIComponentEnvironment m_component;
+    fmi3LogMessageCallback m_fmiLogger;
+    std::shared_ptr<Settings> m_settings;
+};
+#endif
+
+
+#ifndef CPPFMU_USE_FMI_3_0
 // ============================================================================
 // MEMORY MANAGEMENT
 // ============================================================================
@@ -122,8 +232,7 @@ public:
     explicit Memory(const FMICallbackFunctions& callbackFunctions)
         : m_alloc{callbackFunctions.allocateMemory}
         , m_free{callbackFunctions.freeMemory}
-    {
-    }
+    { }
 
     // Allocates memory for 'nObj' objects of size 'size'.
     void* Alloc(std::size_t nObj, std::size_t size) CPPFMU_NOEXCEPT
@@ -166,13 +275,14 @@ class Allocator
 public:
     using value_type = T;
 
-    explicit Allocator(const Memory& memory) : m_memory{memory} { }
+    explicit Allocator(const Memory& memory)
+        : m_memory{memory}
+    { }
 
     template<typename U>
     Allocator(const Allocator<U>& other) CPPFMU_NOEXCEPT
         : m_memory{other.m_memory}
-    {
-    }
+    { }
 
     T* allocate(std::size_t n)
     {
@@ -206,9 +316,12 @@ public:
     // required by GCC and MSVC.
 
     template<typename U>
-    struct rebind { using other = Allocator<U>; };
+    struct rebind
+    {
+        using other = Allocator<U>;
+    };
 
-#if defined(__GNUC__) && (__GNUC__ < 5)
+#   if defined(__GNUC__) && (__GNUC__ < 5)
     using pointer = T*;
     using const_pointer = const T*;
     using reference = T&;
@@ -216,17 +329,19 @@ public:
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-    Allocator() : m_memory{FMICallbackFunctions{}} { }
-#pragma GCC diagnostic pop
-#endif
+#      pragma GCC diagnostic push
+#      pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+    Allocator()
+        : m_memory{FMICallbackFunctions{}}
+    { }
+#      pragma GCC diagnostic pop
+#   endif
 
-#ifdef _MSC_VER
+#   ifdef _MSC_VER
     template<typename U, typename... Args>
     void construct(U* p, Args&&... args)
     {
-        ::new((void*) p) U(std::forward<Args>(args)...);
+        ::new ((void*) p) U(std::forward<Args>(args)...);
     }
 
     template<typename U>
@@ -234,7 +349,7 @@ public:
     {
         p->~U();
     }
-#endif
+#   endif
 
     // -------------------------------------------------------------------------
 
@@ -291,14 +406,6 @@ void Delete(const Memory& memory, T* obj) CPPFMU_NOEXCEPT
 }
 
 
-/* An alias for a std::unique_ptr specialisation where the deleter is general
- * and independent of the type of the object pointed to.  This is used for the
- * return type of AllocateUnique() below.
- */
-template<typename T>
-using UniquePtr = std::unique_ptr<T, std::function<void(void*)>>;
-
-
 /* Creates an object of type T which is managed by a std::unique_ptr.
  * The object is created using cppfmu::New(), and when the time comes, it is
  * destroyed using cppfmu::Delete().
@@ -308,7 +415,7 @@ UniquePtr<T> AllocateUnique(const Memory& memory, Args&&... args)
 {
     return UniquePtr<T>{
         New<T>(memory, std::forward<Args>(args)...),
-        [memory] (void* ptr) { Delete(memory, reinterpret_cast<T*>(ptr)); }};
+        [memory](void* ptr) { Delete(memory, reinterpret_cast<T*>(ptr)); }};
 }
 
 
@@ -318,15 +425,13 @@ UniquePtr<T> AllocateUnique(const Memory& memory, Args&&... args)
 
 namespace detail
 {
-    template<typename Container, typename Item>
-    bool CanFind(const Container& container, const Item& item)
-    {
-        return container.end() != std::find(
-            container.begin(),
-            container.end(),
-            item);
-    }
+template<typename Container, typename Item>
+bool CanFind(const Container& container, const Item& item)
+{
+    return container.end() !=
+        std::find(container.begin(), container.end(), item);
 }
+} // namespace detail
 
 
 /* A class that can be used to log messages from model code.  All messages are
@@ -354,8 +459,7 @@ public:
         , m_instanceName(std::move(instanceName))
         , m_fmiLogger{callbackFunctions.logger}
         , m_settings{settings}
-    {
-    }
+    { }
 
     // Logs a message.
     template<typename... Args>
@@ -388,11 +492,7 @@ public:
         Args&&... args) CPPFMU_NOEXCEPT
     {
         if (m_settings->debugLoggingEnabled) {
-            Log(
-                status,
-                category,
-                message,
-                std::forward<Args>(args)...);
+            Log(status, category, message, std::forward<Args>(args)...);
         }
     }
 
@@ -402,6 +502,7 @@ private:
     const FMICallbackLogger m_fmiLogger;
     std::shared_ptr<Settings> m_settings;
 };
+#endif // CPPFMU_USE_FMI_3_0
 
 
 } // namespace cppfmu
