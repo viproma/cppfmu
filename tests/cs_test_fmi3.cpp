@@ -1,3 +1,7 @@
+// The checks are assert()s: keep them in Release builds, which the conan
+// recipe tests in.
+#undef NDEBUG
+
 #include <fmi3Functions.h>
 
 #include <cassert>

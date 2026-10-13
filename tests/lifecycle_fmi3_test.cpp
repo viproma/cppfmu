@@ -4,6 +4,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+// The checks are assert()s: keep them in Release builds, which the conan
+// recipe tests in.
+#undef NDEBUG
+
 /* Exhaustive test of the FMI 3.0 lifecycle transition table.
  *
  * The point of the module is that its rules can be tested without a slave, an

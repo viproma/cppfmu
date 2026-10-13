@@ -1,3 +1,7 @@
+// The checks are assert()s: keep them in Release builds, which the conan
+// recipe tests in.
+#undef NDEBUG
+
 #ifdef CPPFMU_USE_FMI_1_0
 #   define MODEL_IDENTIFIER
 extern "C"
