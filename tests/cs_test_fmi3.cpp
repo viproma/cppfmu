@@ -24,6 +24,45 @@ extern "C" void logger(
     std::fprintf(stderr, "[%s] %s\n", category, message);
 }
 
+// Counts the messages it receives, so a test can assert that none arrived.
+int g_loggedMessages = 0;
+
+extern "C" void countingLogger(
+    fmi3InstanceEnvironment,
+    fmi3Status,
+    fmi3String,
+    fmi3String) noexcept
+{
+    ++g_loggedMessages;
+}
+
+fmi3Instance InstantiateCounted(fmi3Boolean loggingOn)
+{
+    return fmi3InstantiateCoSimulation(
+        TEST_INSTANCE_NAME,
+        "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+        "",
+        fmi3False,
+        loggingOn,
+        fmi3False,
+        fmi3False,
+        nullptr,
+        0,
+        nullptr,
+        &countingLogger,
+        nullptr);
+}
+
+// The number of messages a refused get of an unknown value reference logs.
+int MessagesFromUnknownGet(fmi3Instance instance)
+{
+    const fmi3ValueReference unknownVr = 999;
+    fmi3Float64 value = 0.0;
+    const int before = g_loggedMessages;
+    assert(fmi3GetFloat64(instance, &unknownVr, 1, &value, 1) == fmi3Error);
+    return g_loggedMessages - before;
+}
+
 int main()
 {
     // Instantiation and setup (FMI 3.0)
@@ -506,6 +545,39 @@ int main()
         assert(fmi3DoStep(eventInstance, 0.0, 0.1, fmi3False, &eventNeeded, &terminateSim,
             &early, &lastTime) == fmi3OK);
         fmi3FreeInstance(eventInstance);
+    }
+
+    // The FMU calls logMessage only when logging is on for the category, errors
+    // included (FMI 3.0, 2.3.1 and fmi3SetDebugLogging).
+    {
+        const auto quiet = InstantiateCounted(fmi3False);
+        assert(quiet);
+        assert(MessagesFromUnknownGet(quiet) == 0);
+        fmi3FreeInstance(quiet);
+
+        const auto loud = InstantiateCounted(fmi3True);
+        assert(loud);
+        assert(MessagesFromUnknownGet(loud) > 0);
+        assert(fmi3SetDebugLogging(loud, fmi3False, 0, nullptr) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) == 0);
+        const char* other[] = {"someOtherCategory"};
+        assert(fmi3SetDebugLogging(loud, fmi3True, 1, other) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) == 0);
+        const char* cppfmu[] = {"cppfmu"};
+        assert(fmi3SetDebugLogging(loud, fmi3True, 1, cppfmu) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) > 0);
+        fmi3FreeInstance(loud);
+
+        const int before = g_loggedMessages;
+        assert(fmi3InstantiateModelExchange(
+                   TEST_INSTANCE_NAME,
+                   "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+                   "",
+                   fmi3False,
+                   fmi3False,
+                   nullptr,
+                   &countingLogger) == nullptr);
+        assert(g_loggedMessages == before);
     }
 
     return 0;

@@ -410,6 +410,12 @@ The `Logger` class is defined and documented in `cppfmu_common.hpp`.
 name parameter).  A `Logger3` class is provided in `cppfmu_common.hpp`
 for this purpose.
 
+In FMI 3.0, a message reaches the importer only if logging is on for its
+category: `loggingOn` at instantiation, then whatever `fmi3SetDebugLogging`
+last set. This holds for every status, errors and fatal errors included, as
+FMI 3.0 requires, so an importer that turns logging off sees no messages from
+the FMU. The FMI 1.0/2.0 wrapper still passes errors on whatever the settings.
+
 Licence
 -------
 CPPFMU is subject to the terms of the [Mozilla Public License, v.

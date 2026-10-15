@@ -527,7 +527,9 @@ private:
  *
  *     logger = A std::function which the model code can use to log messages.
  *              The messages are forwarded to the simulation environment's
- *              logging facilities.
+ *              logging facilities, but only while logging is on for their
+ *              category (loggingOn, then fmi3SetDebugLogging), errors
+ *              included.
  *
  * Note that this function is declared in the global namespace.
  */

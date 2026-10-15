@@ -33,6 +33,15 @@ Unreleased
   slaves are unaffected.
 
 ### Changed
+- FMI 3.0: the FMU calls `logMessage` only while logging is on for the
+  message's category -- `loggingOn` at instantiation, then
+  `fmi3SetDebugLogging` -- for every status. Errors and fatal errors used to be
+  logged whatever the settings, which FMI 3.0 forbids (2.3.1). This includes the
+  messages from a failed `fmi3InstantiateCoSimulation` and from a refused
+  `fmi3InstantiateModelExchange` or `fmi3InstantiateScheduledExecution`.
+  Slaves that rely on errors always reaching the importer must have the
+  importer turn logging on; cacofu's `CppfmuInstantiateSlave` is one. The FMI
+  1.0/2.0 wrapper is unchanged.
 - FMI 3.0 lifecycle handling extracted into a separate, testable `Lifecycle`
   module (`cppfmu_lifecycle_fmi3.{hpp,cpp}`). It holds the whole FMI 3.0
   Co-Simulation state graph in one transition table and is FMI 3.0 only; the

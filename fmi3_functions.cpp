@@ -125,14 +125,16 @@ struct Component
         return false;
     }
 
+    /* Forwards a message to the importer if logging is on for its category,
+     * whatever its status. FMI 3.0 forbids calling logMessage otherwise, errors
+     * included (2.3.1, fmi3SetDebugLogging).
+     */
     void Log(
         fmi3Status status,
         cppfmu::FMIString category,
         cppfmu::FMIString message) const
     {
-        if ((status == fmi3Fatal || status == fmi3Error ||
-             debugLoggingEnabled) &&
-            IsCategoryLogged(category)) {
+        if (debugLoggingEnabled && IsCategoryLogged(category)) {
             if (logMessage) {
                 logMessage(instanceEnvironment, status, category, message);
             }
@@ -290,11 +292,12 @@ fmi3Status RunLegalCall(
 
 /* Refuses to instantiate an interface this layer does not serve. */
 fmi3Instance RefuseInstantiation(
+    fmi3Boolean loggingOn,
     cppfmu::FMIComponentEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage,
     const char* functionName)
 {
-    if (logMessage) {
+    if (loggingOn == fmi3True && logMessage) {
         logMessage(
             instanceEnvironment,
             fmi3Error,
@@ -343,11 +346,12 @@ fmi3Instance fmi3InstantiateModelExchange(
     fmi3String /*instantiationToken*/,
     fmi3String /*resourcePath*/,
     fmi3Boolean /*visible*/,
-    fmi3Boolean /*loggingOn*/,
+    fmi3Boolean loggingOn,
     fmi3InstanceEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage)
 {
     return RefuseInstantiation(
+        loggingOn,
         instanceEnvironment,
         logMessage,
         "fmi3InstantiateModelExchange");
@@ -412,12 +416,12 @@ fmi3Instance fmi3InstantiateCoSimulation(
         }
         return component.release();
     } catch (const cppfmu::FatalError& e) {
-        if (logMessage) {
+        if (loggingOn == fmi3True && logMessage) {
             logMessage(instanceEnvironment, fmi3Fatal, "cppfmu", e.what());
         }
         return nullptr;
     } catch (const std::exception& e) {
-        if (logMessage) {
+        if (loggingOn == fmi3True && logMessage) {
             logMessage(instanceEnvironment, fmi3Error, "cppfmu", e.what());
         }
         return nullptr;
@@ -429,7 +433,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3String /*instantiationToken*/,
     fmi3String /*resourcePath*/,
     fmi3Boolean /*visible*/,
-    fmi3Boolean /*loggingOn*/,
+    fmi3Boolean loggingOn,
     fmi3InstanceEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage,
     fmi3ClockUpdateCallback /*clockUpdate*/,
@@ -437,6 +441,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3UnlockPreemptionCallback /*unlockPreemption*/)
 {
     return RefuseInstantiation(
+        loggingOn,
         instanceEnvironment,
         logMessage,
         "fmi3InstantiateScheduledExecution");
