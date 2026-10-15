@@ -77,7 +77,11 @@ in one transition table: a call made in a state that does not allow it is
 refused with `fmi3Error` and never reaches your slave, and a call that throws
 something other than a refusal puts the instance in a failed state, from which
 only freeing, resetting or restoring a saved FMU state escapes. Your slave code
-therefore does not need to check the current mode itself.
+therefore does not need to check the current mode itself. The exception is
+`GetDirectionalDerivative` and `GetAdjointDerivative`, which FMI 3.0 allows in
+Initialization, Step, Event and Terminated Mode: a slave that cannot answer in
+one of them throws `std::logic_error`, which refuses the call without failing
+the instance.
 
 This applies to FMI 3.0 only; the FMI 1.0/2.0 implementation has no state
 machine. When you compile CPPFMU by hand rather than through Conan, remember to

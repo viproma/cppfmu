@@ -53,6 +53,31 @@ int main()
             0.0);
         assert(rc == fmi3OK);
     }
+    // Directional derivatives reach the slave in Initialization Mode too
+    // (FMI 3.0, 2.3.3). Turn derivative support on for the call and off again,
+    // so the "not supported" checks below still see the default.
+    {
+        const fmi3ValueReference switchVr[] = {1, 2};
+        const fmi3Float64 on[] = {1.0, 3.0};
+        assert(fmi3SetFloat64(instance, switchVr, 2, on, 2) == fmi3OK);
+        const fmi3ValueReference vr[] = {0};
+        fmi3Float64 dvKnown[] = {2.0};
+        fmi3Float64 dvUnknown[] = {0.0};
+        const auto rc = fmi3GetDirectionalDerivative(
+            instance,
+            vr,
+            1,
+            vr,
+            1,
+            dvKnown,
+            1,
+            dvUnknown,
+            1);
+        assert(rc == fmi3OK);
+        assert(dvUnknown[0] == 6.0);
+        const fmi3Float64 off[] = {0.0, 1.0};
+        assert(fmi3SetFloat64(instance, switchVr, 2, off, 2) == fmi3OK);
+    }
     {
         const auto rc = fmi3ExitInitializationMode(instance);
         assert(rc == fmi3OK);

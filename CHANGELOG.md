@@ -41,6 +41,12 @@ Unreleased
   repeated exception-handling boilerplate from every wrapper function.
 
 ### Fixed
+- FMI 3.0: `fmi3GetDirectionalDerivative` and `fmi3GetAdjointDerivative` are
+  accepted in Initialization, Event and Terminated Mode as well as Step Mode, as
+  FMI 3.0 requires; they were refused outside Step Mode. `LifecycleCall::StepModeQuery`
+  is renamed `DerivativeQuery`. A slave that cannot answer in one of the new
+  modes throws `std::logic_error` from its override, which refuses the call
+  without failing the instance.
 - The Conan `generate()` snippet in the README no longer has its `if` statement
   dedented out of the enclosing `for` loop, which silently prevented the C API
   wrapper from being copied; and the file it names is `fmi_functions.cpp`, not

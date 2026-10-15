@@ -92,7 +92,7 @@ constexpr Rule kRules[] = {
     {LifecycleCall::FmuStateRestore,
      kInstantiated | kRunning | kTerminated | kFailed,
      kNoTransition},
-    {LifecycleCall::StepModeQuery, kStep, kNoTransition},
+    {LifecycleCall::DerivativeQuery, kRunning | kTerminated, kNoTransition},
     {LifecycleCall::OutputDerivatives,
      kStep | kIntermediateUpdate,
      kNoTransition},

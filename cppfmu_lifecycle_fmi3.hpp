@@ -34,7 +34,8 @@ enum class LifecycleCall
     SnapshotMemory,  // any state, Failed included
     FmuStateRead,    // any state except Failed
     FmuStateRestore, // any state (recovery handled by RestoreFromSnapshot)
-    StepModeQuery,   // Step only (directional/adjoint derivatives)
+    DerivativeQuery, // Initialization, Step, Event or Terminated
+                     // (directional/adjoint derivatives)
     OutputDerivatives, // Step, and Intermediate Update when gets are allowed
     EvaluateDiscreteStates, // Initialization or Event
     UpdateDiscreteStates,   // Event only

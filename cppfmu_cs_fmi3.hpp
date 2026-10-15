@@ -371,8 +371,10 @@ public:
         const FMIByte data[],
         std::size_t size);
 
-    /* Called from fmi3GetDirectionalDerivative().
-     * Throws std::logic_error by default.
+    /* Called from fmi3GetDirectionalDerivative(), in Initialization, Step, Event or
+     * Terminated Mode. Throws std::logic_error by default. An override that
+     * cannot answer in the current mode throws std::logic_error too, which
+     * refuses the call without failing the instance.
      */
     virtual void GetDirectionalDerivative(
         const FMIValueReference unknowns[],
@@ -384,8 +386,10 @@ public:
         FMIReal sensitivity[],
         std::size_t nSensitivity) const;
 
-    /* Called from fmi3GetAdjointDerivative().
-     * Throws std::logic_error by default.
+    /* Called from fmi3GetAdjointDerivative(), in Initialization, Step, Event or
+     * Terminated Mode. Throws std::logic_error by default. An override that
+     * cannot answer in the current mode throws std::logic_error too, which
+     * refuses the call without failing the instance.
      */
     virtual void GetAdjointDerivative(
         const FMIValueReference unknowns[],

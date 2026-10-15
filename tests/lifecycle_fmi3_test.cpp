@@ -177,9 +177,12 @@ int main()
          State::Terminated,
          State::Failed});
 
-    // Derivatives and stepping are Step-Mode only; discrete-state calls are
-    // confined to the modes that evaluate them.
-    AssertLegalIn(LifecycleCall::StepModeQuery, {State::Step});
+    // Derivatives may be asked for in every mode with a model (FMI 3.0, 2.3.3,
+    // 2.3.5, 2.3.8, 4.2.1); stepping is Step-Mode only; discrete-state calls
+    // are confined to the modes that evaluate them.
+    AssertLegalIn(
+        LifecycleCall::DerivativeQuery,
+        {State::Initialization, State::Step, State::Event, State::Terminated});
     AssertLegalIn(
         LifecycleCall::OutputDerivatives,
         {State::Step, State::IntermediateUpdate});
@@ -283,7 +286,7 @@ int main()
         assert(lc.Allows(LifecycleCall::OutputDerivatives));
         assert(!lc.Allows(LifecycleCall::WriteVariable));
         assert(!lc.Allows(LifecycleCall::DoStep));
-        assert(!lc.Allows(LifecycleCall::StepModeQuery));
+        assert(!lc.Allows(LifecycleCall::DerivativeQuery));
         assert(!lc.Allows(LifecycleCall::FmuStateRead));
         assert(!lc.Allows(LifecycleCall::EnterEventMode));
         assert(!lc.Allows(LifecycleCall::Terminate));

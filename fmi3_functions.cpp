@@ -1097,9 +1097,10 @@ fmi3Status fmi3DeserializeFMUState(
 // =============================================================================
 
 // The quantity FMI asks for here is the partial derivative of the model
-// equations with the states held -- not the response of a step. Confined to
-// Step Mode: a co-simulation slave is free not to have a model to differentiate
-// before ExitInitializationMode or after Terminate.
+// equations with the states held -- not the response of a step. FMI 3.0 allows
+// both calls in Initialization, Step, Event and Terminated Mode (2.3.3, 2.3.5,
+// 2.3.8, 4.2.1). A slave that has no model to differentiate in one of them
+// refuses by throwing std::logic_error, which leaves the instance as it was.
 
 fmi3Status fmi3GetDirectionalDerivative(
     fmi3Instance instance,
@@ -1115,7 +1116,7 @@ fmi3Status fmi3GetDirectionalDerivative(
     return RunLegalCall(
         instance,
         "fmi3GetDirectionalDerivative",
-        LifecycleCall::StepModeQuery,
+        LifecycleCall::DerivativeQuery,
         [&](const cppfmu::SlaveInstance3& slave) {
             slave.GetDirectionalDerivative(
                 unknowns,
@@ -1143,7 +1144,7 @@ fmi3Status fmi3GetAdjointDerivative(
     return RunLegalCall(
         instance,
         "fmi3GetAdjointDerivative",
-        LifecycleCall::StepModeQuery,
+        LifecycleCall::DerivativeQuery,
         [&](const cppfmu::SlaveInstance3& slave) {
             slave.GetAdjointDerivative(
                 unknowns,
