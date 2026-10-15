@@ -254,18 +254,44 @@ int main()
         assert(!lc.Allows(LifecycleCall::FmuStateRead));
     }
 
-    // RestoreFromSnapshot() is the one way from Failed back to Step; from any
-    // other state it leaves the instance where it was.
-    {
-        auto lc = At(State::Failed);
-        lc.RestoreFromSnapshot();
-        assert(lc.CurrentState() == State::Step);
-    }
+    // ========================================================================
+    // Restoring an FMU state puts the instance in the mode the state was taken
+    // in, whatever mode it was in itself -- Failed included, which is how a
+    // Step-mode state recovers a failed instance.
+    // ========================================================================
+    const State kSnapshotModes[] = {
+        State::Instantiated,
+        State::Initialization,
+        State::Step,
+        State::Event,
+        State::Terminated,
+    };
     for (const auto s : kAllStates) {
-        if (s == State::Failed) continue;
-        auto lc = At(s);
-        lc.RestoreFromSnapshot();
-        assert(lc.CurrentState() == s);
+        const bool expected =
+            s != State::Failed && s != State::IntermediateUpdate;
+        assert(Lifecycle::IsSnapshotMode(s) == expected);
+        assert(At(s).Allows(LifecycleCall::FmuStateRead) == expected);
+    }
+    for (const auto from : kAllStates) {
+        if (!At(from).Allows(LifecycleCall::FmuStateRestore)) continue;
+        for (const auto saved : kSnapshotModes) {
+            auto lc = At(from);
+            lc.RestoreFromSnapshot(saved);
+            assert(lc.CurrentState() == saved);
+        }
+        // A mode no state can be taken in is ignored.
+        for (const auto saved : {State::Failed, State::IntermediateUpdate}) {
+            auto lc = At(from);
+            lc.RestoreFromSnapshot(saved);
+            assert(lc.CurrentState() == from);
+        }
+    }
+    {
+        // A Step-mode state restored into a fresh instance can be stepped
+        // without going through initialization.
+        Lifecycle lc;
+        lc.RestoreFromSnapshot(State::Step);
+        assert(lc.Allows(LifecycleCall::DoStep));
     }
 
     // ========================================================================

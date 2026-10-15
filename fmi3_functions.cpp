@@ -28,6 +28,7 @@
  * variable access the FMU opened the update for is legal.
  */
 
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <limits>
@@ -183,6 +184,78 @@ private:
 Component* AsComponent(fmi3Instance instance)
 {
     return reinterpret_cast<Component*>(instance);
+}
+
+/* The fmi3FMUState this layer hands the importer: the slave's own state, and
+ * the mode the instance was in when it was taken.
+ *
+ * FMI 3.0 requires a state to hold everything needed to continue from it
+ * (2.2.6), mode included, but the slave's state is opaque to this layer and the
+ * mode is this layer's to track. So the slave's state travels inside this
+ * wrapper, and restoring it restores the mode too.
+ */
+struct FmuState
+{
+    Lifecycle::State mode;
+    cppfmu::FMIFMUState slave;
+};
+
+FmuState* AsFmuState(fmi3FMUState state)
+{
+    return static_cast<FmuState*>(state);
+}
+
+/* The serialized form of an FmuState: a header, then the slave's bytes.
+ *
+ *     bytes 0-3  kSerializedMagic, so foreign bytes are refused, not misread
+ *     byte  4    kSerializedVersion, the layout of what follows
+ *     byte  5    the mode, as ModeCode() encodes it
+ *     bytes 6-   the slave's serialized state
+ *
+ * The mode has its own encoding so that the format does not change if
+ * Lifecycle::State is ever reordered.
+ */
+const char kSerializedMagic[4] = {'C', 'F', 'S', '3'};
+const unsigned char kSerializedVersion = 1;
+const std::size_t kSerializedHeaderSize = 6;
+
+unsigned char ModeCode(Lifecycle::State mode)
+{
+    switch (mode) {
+    case Lifecycle::State::Instantiated:
+        return 1;
+    case Lifecycle::State::Initialization:
+        return 2;
+    case Lifecycle::State::Step:
+        return 3;
+    case Lifecycle::State::Event:
+        return 4;
+    case Lifecycle::State::Terminated:
+        return 5;
+    default:
+        break;
+    }
+    // Lifecycle forbids taking a state in any other mode.
+    throw std::logic_error("An FMU state cannot be taken in this mode");
+}
+
+Lifecycle::State ModeFromCode(unsigned char code)
+{
+    switch (code) {
+    case 1:
+        return Lifecycle::State::Instantiated;
+    case 2:
+        return Lifecycle::State::Initialization;
+    case 3:
+        return Lifecycle::State::Step;
+    case 4:
+        return Lifecycle::State::Event;
+    case 5:
+        return Lifecycle::State::Terminated;
+    default:
+        break;
+    }
+    throw std::logic_error("The serialized FMU state names an unknown mode");
 }
 
 /* Sends one fmi3Error message to the host, swallowing a failed report.
@@ -985,7 +1058,20 @@ fmi3Status fmi3GetFMUState(fmi3Instance instance, fmi3FMUState* FMUState)
         instance,
         "fmi3GetFMUState",
         LifecycleCall::FmuStateRead,
-        [&](cppfmu::SlaveInstance3& slave) { slave.GetFMUState(FMUState); });
+        [&](cppfmu::SlaveInstance3& slave) {
+            const auto mode = AsComponent(instance)->lifecycle.CurrentState();
+            if (*FMUState != nullptr) {
+                // Overwrite the state the importer passed back, as FMI 3.0
+                // allows.
+                FmuState* const existing = AsFmuState(*FMUState);
+                slave.GetFMUState(&existing->slave);
+                existing->mode = mode;
+            } else {
+                std::unique_ptr<FmuState> state(new FmuState{mode, nullptr});
+                slave.GetFMUState(&state->slave);
+                *FMUState = state.release();
+            }
+        });
 }
 
 fmi3Status fmi3SetFMUState(fmi3Instance instance, fmi3FMUState FMUState)
@@ -996,17 +1082,19 @@ fmi3Status fmi3SetFMUState(fmi3Instance instance, fmi3FMUState FMUState)
             "fmi3SetFMUState",
             "was called without a state");
     }
+    FmuState* const state = AsFmuState(FMUState);
     const fmi3Status status = RunLegalCall(
         instance,
         "fmi3SetFMUState",
         LifecycleCall::FmuStateRestore,
-        [&](cppfmu::SlaveInstance3& slave) { slave.SetFMUState(FMUState); });
-    // FMI 3.0's recovery idiom is to restore a state captured in Step Mode and
-    // keep stepping, so a SetFMUState that succeeds while Failed is the one way
-    // back there other than Reset. RestoreFromSnapshot() performs that move and
-    // leaves any other state alone.
+        [&](cppfmu::SlaveInstance3& slave) {
+            slave.SetFMUState(state->slave);
+        });
+    // The instance continues from the mode the state was taken in, as it would
+    // have if it had never left it -- also from Failed, which is FMI 3.0's
+    // recovery idiom.
     if (status == fmi3OK) {
-        AsComponent(instance)->lifecycle.RestoreFromSnapshot();
+        AsComponent(instance)->lifecycle.RestoreFromSnapshot(state->mode);
     }
     return status;
 }
@@ -1026,7 +1114,11 @@ fmi3Status fmi3FreeFMUState(fmi3Instance instance, fmi3FMUState* FMUState)
         instance,
         "fmi3FreeFMUState",
         LifecycleCall::SnapshotMemory,
-        [&](cppfmu::SlaveInstance3& slave) { slave.FreeFMUState(*FMUState); });
+        [&](cppfmu::SlaveInstance3& slave) {
+            FmuState* const state = AsFmuState(*FMUState);
+            slave.FreeFMUState(state->slave);
+            delete state;
+        });
     // Only a call that did free the state has earned the null that stops the host
     // freeing it twice.
     if (status == fmi3OK) {
@@ -1051,7 +1143,8 @@ fmi3Status fmi3SerializedFMUStateSize(
         "fmi3SerializedFMUStateSize",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            *size = slave.SerializedFMUStateSize(FMUState);
+            *size = kSerializedHeaderSize +
+                slave.SerializedFMUStateSize(AsFmuState(FMUState)->slave);
         });
 }
 
@@ -1072,7 +1165,21 @@ fmi3Status fmi3SerializeFMUState(
         "fmi3SerializeFMUState",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            slave.SerializeFMUState(FMUState, serializedState, size);
+            if (size < kSerializedHeaderSize) {
+                throw std::logic_error(
+                    "The buffer is too small for the serialized FMU state");
+            }
+            const FmuState* const state = AsFmuState(FMUState);
+            std::memcpy(
+                serializedState,
+                kSerializedMagic,
+                sizeof kSerializedMagic);
+            serializedState[4] = kSerializedVersion;
+            serializedState[5] = ModeCode(state->mode);
+            slave.SerializeFMUState(
+                state->slave,
+                serializedState + kSerializedHeaderSize,
+                size - kSerializedHeaderSize);
         });
 }
 
@@ -1093,7 +1200,25 @@ fmi3Status fmi3DeserializeFMUState(
         "fmi3DeserializeFMUState",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            *FMUState = slave.DeserializeFMUState(serializedState, size);
+            if (size < kSerializedHeaderSize ||
+                std::memcmp(
+                    serializedState,
+                    kSerializedMagic,
+                    sizeof kSerializedMagic) != 0) {
+                throw std::logic_error(
+                    "The bytes are not an FMU state serialized by this FMU");
+            }
+            if (serializedState[4] != kSerializedVersion) {
+                throw std::logic_error(
+                    "The FMU state was serialized by an incompatible version "
+                    "of this FMU");
+            }
+            std::unique_ptr<FmuState> state(
+                new FmuState{ModeFromCode(serializedState[5]), nullptr});
+            state->slave = slave.DeserializeFMUState(
+                serializedState + kSerializedHeaderSize,
+                size - kSerializedHeaderSize);
+            *FMUState = state.release();
         });
 }
 

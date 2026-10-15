@@ -50,6 +50,18 @@ Unreleased
   repeated exception-handling boilerplate from every wrapper function.
 
 ### Fixed
+- FMI 3.0: an FMU state restored with `fmi3SetFMUState` now restores the mode
+  it was taken in, as FMI 3.0 requires a state to hold everything needed to
+  continue from it (2.2.6). A Step Mode state set into a freshly instantiated
+  FMU, as `fmusim --initial-fmu-state-file` does, used to leave the instance in
+  Instantiated so the next `fmi3DoStep` was refused. CPPFMU now wraps the
+  slave's state together with the mode, and `fmi3SerializeFMUState` writes a
+  6-byte header (magic, format version, mode) before the slave's bytes, so
+  **states serialized by earlier versions are refused**. The slave API is
+  unchanged, but a slave's state must hold whatever `EnterInitializationMode`
+  and `ExitInitializationMode` set up, since a restored instance may never
+  have had them called. `Lifecycle::RestoreFromSnapshot()` takes the saved
+  mode; restoring a Step Mode state still recovers a failed instance.
 - FMI 3.0: `fmi3GetDirectionalDerivative` and `fmi3GetAdjointDerivative` are
   accepted in Initialization, Event and Terminated Mode as well as Step Mode, as
   FMI 3.0 requires; they were refused outside Step Mode. `LifecycleCall::StepModeQuery`

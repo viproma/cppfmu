@@ -569,15 +569,132 @@ int main()
         fmi3FreeInstance(loud);
 
         const int before = g_loggedMessages;
-        assert(fmi3InstantiateModelExchange(
-                   TEST_INSTANCE_NAME,
-                   "04b947f3-c057-4860-b59b-eb0bd6fa52be",
-                   "",
-                   fmi3False,
-                   fmi3False,
-                   nullptr,
-                   &countingLogger) == nullptr);
+        assert(
+            fmi3InstantiateModelExchange(
+                TEST_INSTANCE_NAME,
+                "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+                "",
+                fmi3False,
+                fmi3False,
+                nullptr,
+                &countingLogger) == nullptr);
         assert(g_loggedMessages == before);
+    }
+
+    // A restored FMU state brings back the mode it was taken in (FMI 3.0,
+    // 2.2.6). This is how fmusim --initial-fmu-state-file starts: a fresh
+    // instance deserializes and sets a Step-mode state, then steps.
+    {
+        const auto source = InstantiateCounted(fmi3False);
+        assert(source);
+        assert(
+            fmi3EnterInitializationMode(
+                source,
+                fmi3False,
+                0.0,
+                0.0,
+                fmi3False,
+                0.0) == fmi3OK);
+        assert(fmi3ExitInitializationMode(source) == fmi3OK);
+        const fmi3ValueReference vr = 0;
+        const fmi3Float64 saved = 42.0;
+        assert(fmi3SetFloat64(source, &vr, 1, &saved, 1) == fmi3OK);
+        fmi3FMUState state = nullptr;
+        assert(fmi3GetFMUState(source, &state) == fmi3OK);
+        std::size_t size = 0;
+        assert(fmi3SerializedFMUStateSize(source, state, &size) == fmi3OK);
+        std::vector<fmi3Byte> bytes(size);
+        assert(
+            fmi3SerializeFMUState(source, state, bytes.data(), bytes.size()) ==
+            fmi3OK);
+
+        // Taken again into the same handle, from Terminated, the state
+        // records the new mode.
+        assert(fmi3Terminate(source) == fmi3OK);
+        assert(fmi3GetFMUState(source, &state) == fmi3OK);
+        assert(fmi3SetFMUState(source, state) == fmi3OK);
+        fmi3Boolean eventNeeded, terminateSim, early;
+        fmi3Float64 lastTime;
+        assert(
+            fmi3DoStep(
+                source,
+                0.0,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3Error);
+        assert(fmi3FreeFMUState(source, &state) == fmi3OK);
+        fmi3FreeInstance(source);
+
+        const auto target = InstantiateCounted(fmi3False);
+        assert(target);
+        fmi3FMUState restored = nullptr;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                bytes.data(),
+                bytes.size(),
+                &restored) == fmi3OK);
+        assert(fmi3SetFMUState(target, restored) == fmi3OK);
+        assert(
+            fmi3DoStep(
+                target,
+                0.0,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3OK);
+        fmi3Float64 value = 0.0;
+        assert(fmi3GetFloat64(target, &vr, 1, &value, 1) == fmi3OK);
+        assert(value == saved);
+        assert(fmi3FreeFMUState(target, &restored) == fmi3OK);
+
+        // Bytes that are not a state serialized by this FMU are refused, and
+        // the instance is not failed by them.
+        std::vector<fmi3Byte> foreign(bytes);
+        foreign[0] ^= 0xFF;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                foreign.data(),
+                foreign.size(),
+                &restored) == fmi3Error);
+        assert(restored == nullptr);
+        std::vector<fmi3Byte> newer(bytes);
+        newer[4] += 1;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                newer.data(),
+                newer.size(),
+                &restored) == fmi3Error);
+        std::vector<fmi3Byte> badMode(bytes);
+        badMode[5] = 0;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                badMode.data(),
+                badMode.size(),
+                &restored) == fmi3Error);
+        assert(
+            fmi3DeserializeFMUState(target, bytes.data(), 3, &restored) ==
+            fmi3Error);
+        assert(restored == nullptr);
+        assert(
+            fmi3DoStep(
+                target,
+                0.1,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3OK);
+        fmi3FreeInstance(target);
     }
 
     return 0;

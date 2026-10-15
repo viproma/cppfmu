@@ -162,10 +162,16 @@ void Lifecycle::Fail() noexcept
     m_state = State::Failed;
 }
 
-void Lifecycle::RestoreFromSnapshot() noexcept
+bool Lifecycle::IsSnapshotMode(State mode) noexcept
 {
-    if (m_state == State::Failed) {
-        m_state = State::Step;
+    return (RuleFor(LifecycleCall::FmuStateRead).legalStates &
+            StateBit(mode)) != 0u;
+}
+
+void Lifecycle::RestoreFromSnapshot(State saved) noexcept
+{
+    if (IsSnapshotMode(saved)) {
+        m_state = saved;
     }
 }
 

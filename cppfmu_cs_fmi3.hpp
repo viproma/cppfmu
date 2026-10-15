@@ -338,6 +338,13 @@ public:
 
     /* Called from fmi3GetFMUState().
      * Throws std::logic_error by default.
+     *
+     * The state must hold everything the slave needs to continue from it.
+     * CPPFMU records the instance's mode alongside it and restores that too,
+     * so fmi3SetFMUState() can put a fresh instance straight into Step Mode
+     * without EnterInitializationMode() or ExitInitializationMode() ever
+     * having been called on it. Whatever those set up must therefore be part
+     * of the state as well.
      */
     virtual void GetFMUState(FMIFMUState* state);
 
@@ -357,7 +364,8 @@ public:
     virtual std::size_t SerializedFMUStateSize(FMIFMUState state);
 
     /* Called from fmi3SerializeFMUState().
-     * Throws std::logic_error by default.
+     * Throws std::logic_error by default. 'data' and 'size' cover the slave's
+     * part of the buffer only; CPPFMU writes a header of its own before it.
      */
     virtual void SerializeFMUState(
         FMIFMUState state,
@@ -371,10 +379,10 @@ public:
         const FMIByte data[],
         std::size_t size);
 
-    /* Called from fmi3GetDirectionalDerivative(), in Initialization, Step, Event or
-     * Terminated Mode. Throws std::logic_error by default. An override that
-     * cannot answer in the current mode throws std::logic_error too, which
-     * refuses the call without failing the instance.
+    /* Called from fmi3GetDirectionalDerivative(), in Initialization, Step,
+     * Event or Terminated Mode. Throws std::logic_error by default. An
+     * override that cannot answer in the current mode throws std::logic_error
+     * too, which refuses the call without failing the instance.
      */
     virtual void GetDirectionalDerivative(
         const FMIValueReference unknowns[],
@@ -386,10 +394,10 @@ public:
         FMIReal sensitivity[],
         std::size_t nSensitivity) const;
 
-    /* Called from fmi3GetAdjointDerivative(), in Initialization, Step, Event or
-     * Terminated Mode. Throws std::logic_error by default. An override that
-     * cannot answer in the current mode throws std::logic_error too, which
-     * refuses the call without failing the instance.
+    /* Called from fmi3GetAdjointDerivative(), in Initialization, Step,
+     * Event or Terminated Mode. Throws std::logic_error by default. An
+     * override that cannot answer in the current mode throws std::logic_error
+     * too, which refuses the call without failing the instance.
      */
     virtual void GetAdjointDerivative(
         const FMIValueReference unknowns[],
