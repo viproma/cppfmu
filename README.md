@@ -413,11 +413,32 @@ The `Logger` class is defined and documented in `cppfmu_common.hpp`.
 name parameter).  A `Logger3` class is provided in `cppfmu_common.hpp`
 for this purpose.
 
-In FMI 3.0, a message reaches the importer only if logging is on for its
-category: `loggingOn` at instantiation, then whatever `fmi3SetDebugLogging`
-last set. This holds for every status, errors and fatal errors included, as
-FMI 3.0 requires, so an importer that turns logging off sees no messages from
-the FMU. The FMI 1.0/2.0 wrapper still passes errors on whatever the settings.
+In FMI 2.0 and FMI 3.0, a message reaches the importer only if logging is on
+for its category: `loggingOn` at instantiation, then whatever
+`fmi2SetDebugLogging` or `fmi3SetDebugLogging` last set. This holds for every
+status, errors and fatal errors included, as FMI 3.0 requires and FMI 2.0
+recommends, so an importer that turns logging off sees no messages from the
+FMU. In FMI 2.0, `Logger::Log()` and `Logger::DebugLog()` therefore do the same.
+The FMI 1.0 wrapper still passes errors on whatever the settings, since FMI 1.0's
+`loggingOn` only controls debug logging.
+
+The messages CPPFMU logs itself (errors from the slave's exceptions, refused
+calls, unsupported functions) use the category `"cppfmu"`. To use another
+category, define `CPPFMU_LOG_CATEGORY` as a string literal when you compile
+`fmi_functions.cpp` or `fmi3_functions.cpp`, for example
+`target_compile_definitions(my_fmu PRIVATE CPPFMU_LOG_CATEGORY="myModel")`.
+Whichever category is used, declare it in `modelDescription.xml`, together
+with any categories the slave logs with, so that the importer can turn it on:
+
+```xml
+<LogCategories>
+    <Category name="cppfmu" description="Errors reported by CPPFMU"/>
+</LogCategories>
+```
+
+FMI 2.0 and FMI 3.0 allow only declared categories, and require a NULL category
+from an FMU that declares none. For such an FMU, define
+`CPPFMU_LOG_CATEGORY=NULL`, and log with a NULL category from the slave too.
 
 Licence
 -------

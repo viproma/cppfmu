@@ -97,6 +97,28 @@ if(CPPFMU_FMI_ALL)
     target_link_libraries(cs_test PRIVATE cppfmu)
     add_test(NAME "cs_test" COMMAND cs_test)
 
+    # The FMI 2.0 test again, with the wrapper's log category changed.
+    add_executable(cs_test_log_category
+        "tests/cs_test.cpp"
+        "tests/cs_slave.cpp"
+        "fmi_functions.cpp"
+    )
+    target_compile_features(cs_test_log_category PRIVATE cxx_std_11)
+    target_compile_definitions(cs_test_log_category PRIVATE CPPFMU_LOG_CATEGORY="myCategory")
+    target_link_libraries(cs_test_log_category PRIVATE cppfmu)
+    add_test(NAME "cs_test_log_category" COMMAND cs_test_log_category)
+
+    # And with a NULL category, for an FMU that declares no LogCategories.
+    add_executable(cs_test_null_log_category
+        "tests/cs_test.cpp"
+        "tests/cs_slave.cpp"
+        "fmi_functions.cpp"
+    )
+    target_compile_features(cs_test_null_log_category PRIVATE cxx_std_11)
+    target_compile_definitions(cs_test_null_log_category PRIVATE CPPFMU_LOG_CATEGORY=NULL)
+    target_link_libraries(cs_test_null_log_category PRIVATE cppfmu)
+    add_test(NAME "cs_test_null_log_category" COMMAND cs_test_null_log_category)
+
     add_executable(cs_test_fmi3
         "tests/cs_test_fmi3.cpp"
         "tests/cs_slave_fmi3.cpp"
@@ -167,4 +189,26 @@ else()
     target_compile_features(cs_test PRIVATE cxx_std_11)
     target_link_libraries(cs_test PRIVATE cppfmu)
     add_test(NAME "cs_test" COMMAND cs_test)
+
+    # The FMI 2.0 test again, with the wrapper's log category changed.
+    add_executable(cs_test_log_category
+        "tests/cs_test.cpp"
+        "tests/cs_slave.cpp"
+        "fmi_functions.cpp"
+    )
+    target_compile_features(cs_test_log_category PRIVATE cxx_std_11)
+    target_compile_definitions(cs_test_log_category PRIVATE CPPFMU_LOG_CATEGORY="myCategory")
+    target_link_libraries(cs_test_log_category PRIVATE cppfmu)
+    add_test(NAME "cs_test_log_category" COMMAND cs_test_log_category)
+
+    # And with a NULL category, for an FMU that declares no LogCategories.
+    add_executable(cs_test_null_log_category
+        "tests/cs_test.cpp"
+        "tests/cs_slave.cpp"
+        "fmi_functions.cpp"
+    )
+    target_compile_features(cs_test_null_log_category PRIVATE cxx_std_11)
+    target_compile_definitions(cs_test_null_log_category PRIVATE CPPFMU_LOG_CATEGORY=NULL)
+    target_link_libraries(cs_test_null_log_category PRIVATE cppfmu)
+    add_test(NAME "cs_test_null_log_category" COMMAND cs_test_null_log_category)
 endif()

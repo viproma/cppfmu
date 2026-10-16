@@ -21,6 +21,13 @@ extern "C"
 #include <vector>
 
 
+// The category the wrapper logs with, as fmi_functions.cpp is compiled.
+#ifndef CPPFMU_LOG_CATEGORY
+#   define CPPFMU_LOG_CATEGORY "cppfmu"
+#endif
+const char* const wrapperCategory = CPPFMU_LOG_CATEGORY;
+
+
 #ifdef CPPFMU_USE_FMI_1_0
 const double TEST_VALUE = 2.0;
 const char* const TEST_INSTANCE_NAME = "MyInstance";
@@ -45,6 +52,10 @@ extern "C" void logger(
 const double TEST_VALUE = 2.0;
 const char* const TEST_INSTANCE_NAME = "MyInstance";
 
+// The last message and category the FMU logged, formatted.
+std::string lastLogMessage;
+std::string lastLogCategory;
+
 
 extern "C" void logger(
     fmi2ComponentEnvironment,
@@ -55,11 +66,14 @@ extern "C" void logger(
     ...) noexcept
 {
     assert(std::string(instanceName) == std::string(TEST_INSTANCE_NAME));
+    char buffer[1024];
     va_list args;
     va_start(args, message);
-    std::vfprintf(stderr, message, args);
-    std::fprintf(stderr, "\n");
+    std::vsnprintf(buffer, sizeof buffer, message, args);
     va_end(args);
+    lastLogMessage = buffer;
+    lastLogCategory = category ? category : "(null)";
+    std::fprintf(stderr, "%s\n", buffer);
 }
 #endif
 
@@ -423,11 +437,126 @@ int main()
         assert(val == -1.0);
     }
 
+    // An exception message is logged as text, not used as a printf format.
+    {
+        const fmi2ValueReference throwingVr = 3;
+        const fmi2Real val = 0.0;
+        const auto rc = fmi2SetReal(instance, &throwingVr, 1, &val);
+        assert(rc == fmi2Error);
+        assert(lastLogMessage == "fmi2SetReal: %s%s%n");
+        assert(
+            lastLogCategory ==
+            (wrapperCategory ? wrapperCategory : std::string("(null)")));
+    }
+
+    // Messages, errors included, reach the importer only while logging is on
+    // for their category.
+    {
+        const fmi2ValueReference throwingVr = 3;
+        const fmi2Real val = 0.0;
+        const fmi2String wrapperCategories[] = {wrapperCategory};
+        const fmi2String otherCategory[] = {"other"};
+
+        assert(fmi2SetDebugLogging(instance, fmi2False, 0, nullptr) == fmi2OK);
+        lastLogMessage.clear();
+        assert(fmi2SetReal(instance, &throwingVr, 1, &val) == fmi2Error);
+        assert(lastLogMessage.empty());
+
+        assert(
+            fmi2SetDebugLogging(instance, fmi2True, 1, otherCategory) ==
+            fmi2OK);
+        assert(fmi2SetReal(instance, &throwingVr, 1, &val) == fmi2Error);
+        assert(lastLogMessage.empty());
+
+        // A NULL category cannot be picked out; the step above showed that it
+        // is off while other categories are.
+        if (wrapperCategory) {
+            assert(
+                fmi2SetDebugLogging(instance, fmi2True, 1, wrapperCategories) ==
+                fmi2OK);
+            assert(fmi2SetReal(instance, &throwingVr, 1, &val) == fmi2Error);
+            assert(lastLogMessage == "fmi2SetReal: %s%s%n");
+        }
+
+        assert(fmi2SetDebugLogging(instance, fmi2True, 0, nullptr) == fmi2OK);
+    }
+
+    // A step size that is not positive is refused.
+    {
+        const auto rc = fmi2DoStep(instance, 0.1, 0.0, fmi2False);
+        assert(rc == fmi2Error);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+    }
+    {
+        const auto rc = fmi2DoStep(instance, 0.1, -0.1, fmi2False);
+        assert(rc == fmi2Error);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+    }
+
+    // fmi2Terminated is answered, as importers ask for it after a discard.
+    {
+        fmi2Boolean terminated = fmi2True;
+        const auto rc =
+            fmi2GetBooleanStatus(instance, fmi2Terminated, &terminated);
+        assert(rc == fmi2OK);
+        assert(terminated == fmi2False);
+    }
+    {
+        fmi2Boolean value = fmi2False;
+        const auto rc =
+            fmi2GetBooleanStatus(instance, fmi2DoStepStatus, &value);
+        assert(rc == fmi2Error);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+    }
+
+    // Freeing a NULL FMU state is ignored.
+    {
+        fmi2FMUstate nullState = nullptr;
+        const auto rc = fmi2FreeFMUstate(instance, &nullState);
+        assert(rc == fmi2OK);
+    }
+
     // Termination (FMI 2.0)
     const auto terminateResult = fmi2Terminate(instance);
     assert(terminateResult == fmi2OK);
 
     fmi2FreeInstance(instance);
+
+    // Freeing a NULL instance is ignored.
+    fmi2FreeInstance(nullptr);
+
+    // NULL memory callbacks are allowed when the FMU declares
+    // canNotUseMemoryManagementFunctions (fmusim always passes NULL).
+    {
+        const auto nullMemoryCallbacks = fmi2CallbackFunctions{
+            &logger,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+        };
+        const auto instance2 = fmi2Instantiate(
+            TEST_INSTANCE_NAME,
+            fmi2CoSimulation,
+            "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+            nullptr,
+            &nullMemoryCallbacks,
+            fmi2False,
+            fmi2False);
+        assert(instance2);
+        assert(fmi2SetReal(instance2, &validVr, 1, &value2) == fmi2OK);
+
+        // Instantiated with loggingOn = fmi2False, so the error is not logged.
+        const fmi2ValueReference throwingVr = 3;
+        lastLogMessage.clear();
+        assert(fmi2SetReal(instance2, &throwingVr, 1, &value2) == fmi2Error);
+        assert(lastLogMessage.empty());
+
+        fmi2FMUstate state2 = nullptr;
+        assert(fmi2GetFMUstate(instance2, &state2) == fmi2OK);
+        assert(fmi2FreeFMUstate(instance2, &state2) == fmi2OK);
+        fmi2FreeInstance(instance2);
+    }
 #endif
     return 0;
 }

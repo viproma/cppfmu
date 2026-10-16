@@ -22,6 +22,9 @@ public:
                 value_ = value[i];
             } else if (vr[i] == 2) {
                 seed_ = value[i];
+            } else if (vr[i] == 3) {
+                // A message that is undefined behaviour if used as a format.
+                throw std::runtime_error("%s%s%n");
             } else {
                 throw std::logic_error("Invalid value reference");
             }

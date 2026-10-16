@@ -80,13 +80,16 @@ struct Component
         if (time < lastFinishedUpdate) {
             throw std::logic_error(
                 "IntermediateUpdate: the time " + std::to_string(time) +
-                " precedes an earlier update with intermediateStepFinished, at " +
+                " precedes an earlier update with intermediateStepFinished, "
+                "at " +
                 std::to_string(lastFinishedUpdate));
         }
 
         fmi3Boolean earlyReturnRequested = fmi3False;
         fmi3Float64 earlyReturnTime = time;
-        lifecycle.EnterIntermediateUpdate(variableSetRequested, variableGetAllowed);
+        lifecycle.EnterIntermediateUpdate(
+            variableSetRequested,
+            variableGetAllowed);
         intermediateUpdate(
             instanceEnvironment,
             time,
@@ -117,9 +120,12 @@ struct Component
         return result;
     }
 
-    bool IsCategoryLogged(const std::string& category) const
+    // A NULL category (an FMU that declares none) is logged only while
+    // fmi3SetDebugLogging has not picked out categories.
+    bool IsCategoryLogged(cppfmu::FMIString category) const
     {
         if (loggedCategories.empty()) return true;
+        if (category == nullptr) return false;
         for (const auto& c : loggedCategories) {
             if (c == category) return true;
         }
@@ -165,7 +171,10 @@ struct Component
 class DoStepScope
 {
 public:
-    DoStepScope(Component& component, cppfmu::FMIReal start, cppfmu::FMIReal end)
+    DoStepScope(
+        Component& component,
+        cppfmu::FMIReal start,
+        cppfmu::FMIReal end)
         : m_component(component)
     {
         m_component.inDoStep = true;
@@ -173,7 +182,10 @@ public:
         m_component.stepEnd = end;
         m_component.lastFinishedUpdate = start;
     }
-    ~DoStepScope() { m_component.inDoStep = false; }
+    ~DoStepScope()
+    {
+        m_component.inDoStep = false;
+    }
     DoStepScope(const DoStepScope&) = delete;
     DoStepScope& operator=(const DoStepScope&) = delete;
 
@@ -268,7 +280,7 @@ Lifecycle::State ModeFromCode(unsigned char code)
 void ReportError(const Component& component, const char* message)
 {
     try {
-        component.Log(fmi3Error, "cppfmu", message);
+        component.Log(fmi3Error, CPPFMU_LOG_CATEGORY, message);
     } catch (...) {
         // There is nothing left to report a failed report with.
     }
@@ -374,7 +386,7 @@ fmi3Instance RefuseInstantiation(
         logMessage(
             instanceEnvironment,
             fmi3Error,
-            "cppfmu",
+            CPPFMU_LOG_CATEGORY,
             (std::string(functionName) +
              " is not provided by this FMU, which declares Co-Simulation only")
                 .c_str());
@@ -446,8 +458,11 @@ fmi3Instance fmi3InstantiateCoSimulation(
 {
     std::unique_ptr<Component> component;
     try {
-        component.reset(
-            new Component(instanceEnvironment, logMessage, loggingOn, eventModeUsed));
+        component.reset(new Component(
+            instanceEnvironment,
+            logMessage,
+            loggingOn,
+            eventModeUsed));
 
         auto* comp = component.get();
         auto loggerFn = [comp](
@@ -490,12 +505,20 @@ fmi3Instance fmi3InstantiateCoSimulation(
         return component.release();
     } catch (const cppfmu::FatalError& e) {
         if (loggingOn == fmi3True && logMessage) {
-            logMessage(instanceEnvironment, fmi3Fatal, "cppfmu", e.what());
+            logMessage(
+                instanceEnvironment,
+                fmi3Fatal,
+                CPPFMU_LOG_CATEGORY,
+                e.what());
         }
         return nullptr;
     } catch (const std::exception& e) {
         if (loggingOn == fmi3True && logMessage) {
-            logMessage(instanceEnvironment, fmi3Error, "cppfmu", e.what());
+            logMessage(
+                instanceEnvironment,
+                fmi3Error,
+                CPPFMU_LOG_CATEGORY,
+                e.what());
         }
         return nullptr;
     }

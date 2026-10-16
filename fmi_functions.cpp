@@ -49,6 +49,9 @@ struct Component
 // which FMI 1.0/2.0 do not model.  A cppfmu::FatalError becomes FMIFatal;
 // any other std::exception, or a throw carrying no std::exception, becomes
 // FMIError instead of escaping across the C linkage boundary.
+//
+// The FMI 1.0/2.0 logger treats its message as a printf format, so text that
+// may contain '%' (an exception message) is always passed as an argument.
 template<typename Operation>
 cppfmu::FMIStatus RunCall(
     cppfmu::FMIComponent c,
@@ -65,21 +68,25 @@ cppfmu::FMIStatus RunCall(
     } catch (const cppfmu::FatalError& e) {
         component->logger.Log(
             cppfmu::FMIFatal,
-            "cppfmu",
-            (std::string(functionName) + ": " + e.what()).c_str());
+            CPPFMU_LOG_CATEGORY,
+            "%s: %s",
+            functionName,
+            e.what());
         return cppfmu::FMIFatal;
     } catch (const std::exception& e) {
         component->logger.Log(
             cppfmu::FMIError,
-            "cppfmu",
-            (std::string(functionName) + ": " + e.what()).c_str());
+            CPPFMU_LOG_CATEGORY,
+            "%s: %s",
+            functionName,
+            e.what());
         return cppfmu::FMIError;
     } catch (...) {
         component->logger.Log(
             cppfmu::FMIError,
-            "cppfmu",
-            (std::string(functionName) + ": exception carrying no message")
-                .c_str());
+            CPPFMU_LOG_CATEGORY,
+            "%s: exception carrying no message",
+            functionName);
         return cppfmu::FMIError;
     }
 }
@@ -132,10 +139,22 @@ fmiComponent fmiInstantiateSlave(
             component->logger);
         return component.release();
     } catch (const cppfmu::FatalError& e) {
-        functions.logger(nullptr, instanceName, fmiFatal, "", e.what());
+        functions.logger(
+            nullptr,
+            instanceName,
+            fmiFatal,
+            CPPFMU_LOG_CATEGORY,
+            "%s",
+            e.what());
         return nullptr;
     } catch (const std::exception& e) {
-        functions.logger(nullptr, instanceName, fmiError, "", e.what());
+        functions.logger(
+            nullptr,
+            instanceName,
+            fmiError,
+            CPPFMU_LOG_CATEGORY,
+            "%s",
+            e.what());
         return nullptr;
     }
 }
@@ -143,6 +162,7 @@ fmiComponent fmiInstantiateSlave(
 void fmiFreeSlaveInstance(fmiComponent c)
 {
     const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) return;
     // The Component object was allocated using cppfmu::AllocateUnique(),
     // which uses cppfmu::New() internally, so we use cppfmu::Delete() to
     // release it again.
@@ -305,7 +325,7 @@ fmiStatus fmiCancelStep(fmiComponent c)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmiCancelStep");
     return fmiError;
 }
@@ -317,6 +337,7 @@ fmiStatus fmiDoStep(
     fmiBoolean newStep)
 {
     const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) return fmiError;
     try {
         double endTime = currentCommunicationPoint;
         const auto ok = component->slave->DoStep(
@@ -333,10 +354,18 @@ fmiStatus fmiDoStep(
             return fmiDiscard;
         }
     } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmiFatal, "", e.what());
+        component->logger
+            .Log(fmiFatal, CPPFMU_LOG_CATEGORY, "fmiDoStep: %s", e.what());
         return fmiFatal;
     } catch (const std::exception& e) {
-        component->logger.Log(fmiError, "", e.what());
+        component->logger
+            .Log(fmiError, CPPFMU_LOG_CATEGORY, "fmiDoStep: %s", e.what());
+        return fmiError;
+    } catch (...) {
+        component->logger.Log(
+            fmiError,
+            CPPFMU_LOG_CATEGORY,
+            "fmiDoStep: exception carrying no message");
         return fmiError;
     }
 }
@@ -348,7 +377,7 @@ fmiStatus fmiGetStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmiGetStatus");
     return fmiError;
 }
@@ -365,7 +394,7 @@ fmiStatus fmiGetRealStatus(
     } else {
         component->logger.Log(
             fmiError,
-            "cppfmu",
+            CPPFMU_LOG_CATEGORY,
             "Invalid status inquiry for fmiGetRealStatus");
         return fmiError;
     }
@@ -378,7 +407,7 @@ fmiStatus fmiGetIntegerStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmiGetIntegerStatus");
     return fmiError;
 }
@@ -390,7 +419,7 @@ fmiStatus fmiGetBooleanStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmiGetBooleanStatus");
     return fmiError;
 }
@@ -402,7 +431,7 @@ fmiStatus fmiGetStringStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmiError,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmiGetStringStatus");
     return fmiError;
 }
@@ -432,6 +461,7 @@ fmi2Component fmi2Instantiate(
     fmi2Boolean visible,
     fmi2Boolean loggingOn)
 {
+    if (functions == nullptr) return nullptr;
     try {
         if (fmuType != fmi2CoSimulation) {
             throw std::logic_error(
@@ -455,17 +485,36 @@ fmi2Component fmi2Instantiate(
             component->logger);
         return component.release();
     } catch (const cppfmu::FatalError& e) {
-        functions->logger(nullptr, instanceName, fmi2Fatal, "", e.what());
+        if (loggingOn == fmi2True && functions->logger) {
+            functions->logger(
+                functions->componentEnvironment,
+                instanceName,
+                fmi2Fatal,
+                CPPFMU_LOG_CATEGORY,
+                "%s",
+                e.what());
+        }
         return nullptr;
     } catch (const std::exception& e) {
-        functions->logger(nullptr, instanceName, fmi2Error, "", e.what());
+        if (loggingOn == fmi2True && functions->logger) {
+            functions->logger(
+                functions->componentEnvironment,
+                instanceName,
+                fmi2Error,
+                CPPFMU_LOG_CATEGORY,
+                "%s",
+                e.what());
+        }
         return nullptr;
     }
 }
 
 void fmi2FreeInstance(fmi2Component c)
 {
+    // "If a null pointer is provided for c, the function call is ignored"
+    // (FMI 2.0, 2.1.5).
     const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) return;
     // The Component object was allocated using cppfmu::AllocateUnique(),
     // which uses cppfmu::New() internally, so we use cppfmu::Delete() to
     // release it again.
@@ -644,7 +693,8 @@ fmi2Status fmi2SetFMUstate(fmi2Component c, fmi2FMUstate state)
 
 fmi2Status fmi2FreeFMUstate(fmi2Component c, fmi2FMUstate* state)
 {
-    if (state == nullptr) return fmi2OK;
+    // "If a null pointer is provided, the call is ignored" (FMI 2.0, 2.1.8).
+    if (state == nullptr || *state == nullptr) return fmi2OK;
     return RunCall(c, "fmi2FreeFMUstate", [&](cppfmu::SlaveInstance& slave) {
         slave.FreeFMUState(*state);
         *state = nullptr;
@@ -752,6 +802,16 @@ fmi2Status fmi2DoStep(
     fmi2Boolean /*noSetFMUStatePriorToCurrentPoint*/)
 {
     const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) return fmi2Error;
+    // FMI 2.0 requires a positive step (4.2.2). A NaN one is refused too, before
+    // it reaches the slave.
+    if (!(communicationStepSize > 0.0)) {
+        component->logger.Log(
+            fmi2Error,
+            CPPFMU_LOG_CATEGORY,
+            "fmi2DoStep needs a communicationStepSize greater than zero");
+        return fmi2Error;
+    }
     try {
         double endTime = currentCommunicationPoint;
         const auto ok = component->slave->DoStep(
@@ -768,10 +828,18 @@ fmi2Status fmi2DoStep(
             return fmi2Discard;
         }
     } catch (const cppfmu::FatalError& e) {
-        component->logger.Log(fmi2Fatal, "", e.what());
+        component->logger
+            .Log(fmi2Fatal, CPPFMU_LOG_CATEGORY, "fmi2DoStep: %s", e.what());
         return fmi2Fatal;
     } catch (const std::exception& e) {
-        component->logger.Log(fmi2Error, "", e.what());
+        component->logger
+            .Log(fmi2Error, CPPFMU_LOG_CATEGORY, "fmi2DoStep: %s", e.what());
+        return fmi2Error;
+    } catch (...) {
+        component->logger.Log(
+            fmi2Error,
+            CPPFMU_LOG_CATEGORY,
+            "fmi2DoStep: exception carrying no message");
         return fmi2Error;
     }
 }
@@ -780,7 +848,7 @@ fmi2Status fmi2CancelStep(fmi2Component c)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmi2Error,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmi2CancelStep");
     return fmi2Error;
 }
@@ -790,7 +858,7 @@ fmi2Status fmi2GetStatus(fmi2Component c, const fmi2StatusKind, fmi2Status*)
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmi2Error,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmi2GetStatus");
     return fmi2Error;
 }
@@ -807,7 +875,7 @@ fmi2Status fmi2GetRealStatus(
     } else {
         component->logger.Log(
             fmi2Error,
-            "cppfmu",
+            CPPFMU_LOG_CATEGORY,
             "Invalid status inquiry for fmi2GetRealStatus");
         return fmi2Error;
     }
@@ -820,20 +888,29 @@ fmi2Status fmi2GetIntegerStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmi2Error,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmi2GetIntegerStatus");
     return fmi2Error;
 }
 
 fmi2Status fmi2GetBooleanStatus(
     fmi2Component c,
-    const fmi2StatusKind,
-    fmi2Boolean*)
+    const fmi2StatusKind s,
+    fmi2Boolean* value)
 {
-    reinterpret_cast<Component*>(c)->logger.Log(
+    const auto component = reinterpret_cast<Component*>(c);
+    if (component == nullptr) return fmi2Error;
+    // Importers ask for fmi2Terminated after fmi2DoStep returned fmi2Discard
+    // (4.2.3). A slave cannot ask to end the simulation, so the answer is
+    // always no.
+    if (s == fmi2Terminated && value != nullptr) {
+        *value = fmi2False;
+        return fmi2OK;
+    }
+    component->logger.Log(
         fmi2Error,
-        "cppfmu",
-        "FMI function not supported: fmi2GetBooleanStatus");
+        CPPFMU_LOG_CATEGORY,
+        "Invalid status inquiry for fmi2GetBooleanStatus");
     return fmi2Error;
 }
 
@@ -844,7 +921,7 @@ fmi2Status fmi2GetStringStatus(
 {
     reinterpret_cast<Component*>(c)->logger.Log(
         fmi2Error,
-        "cppfmu",
+        CPPFMU_LOG_CATEGORY,
         "FMI function not supported: fmi2GetStringStatus");
     return fmi2Error;
 }
