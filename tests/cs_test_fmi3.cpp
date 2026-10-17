@@ -458,6 +458,40 @@ int main()
         assert(rc == fmi3Error);
     }
 
+    // Test fmi3GetVariableDependencies (success path): the slave fills all
+    // five buffers, including the dependent's element indices.
+    {
+        size_t nDeps = 0;
+        assert(
+            fmi3GetNumberOfVariableDependencies(instance, 10, &nDeps) ==
+            fmi3OK);
+        assert(nDeps == 2);
+
+        fmi3ValueReference independents[2] = {99, 99};
+        size_t elementIndicesOfDependent[2] = {99, 99};
+        size_t elementIndicesOfIndependents[2] = {99, 99};
+        fmi3DependencyKind dependencyKinds[2] = {
+            fmi3Independent,
+            fmi3Independent};
+        const auto rc = fmi3GetVariableDependencies(
+            instance,
+            10,
+            elementIndicesOfDependent,
+            independents,
+            elementIndicesOfIndependents,
+            dependencyKinds,
+            nDeps);
+        assert(rc == fmi3OK);
+        assert(elementIndicesOfDependent[0] == 1);
+        assert(elementIndicesOfDependent[1] == 2);
+        assert(independents[0] == 0);
+        assert(independents[1] == 3);
+        assert(elementIndicesOfIndependents[0] == 0);
+        assert(elementIndicesOfIndependents[1] == 1);
+        assert(dependencyKinds[0] == fmi3Dependent);
+        assert(dependencyKinds[1] == fmi3Discrete);
+    }
+
     // Test Event Mode lifecycle (success path — default implementations)
     {
         const auto rc = fmi3EnterEventMode(instance);

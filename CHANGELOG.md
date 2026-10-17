@@ -84,6 +84,13 @@ Unreleased
   `fmi2False` instead of `fmi2Error`. fmusim and FMPy ask for it after every
   `fmi2Discard` from `fmi2DoStep`, so a discarded step used to end their run with
   an error.
+- FMI 3.0: `SlaveInstance3::GetVariableDependencies()` takes
+  `elementIndicesOfDependent` as `std::size_t[]` instead of
+  `const std::size_t[]`. It is an output buffer that the FMU fills (FMI 3.0,
+  2.2.9), as the `fmi3GetVariableDependencies` C function declares it, so a
+  slave could not fill it without a `const_cast`. **Source-incompatible:** a
+  slave that overrides the function must drop the `const` from that parameter,
+  or its `override` no longer compiles.
 - FMI 3.0: an FMU state restored with `fmi3SetFMUState` now restores the mode
   it was taken in, as FMI 3.0 requires a state to hold everything needed to
   continue from it (2.2.6). A Step Mode state set into a freshly instantiated

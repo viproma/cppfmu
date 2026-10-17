@@ -409,12 +409,16 @@ public:
         FMIReal sensitivity[],
         std::size_t nSensitivity) const;
 
-    /* Called from fmi3GetVariableDependencies().
+    /* Called from fmi3GetVariableDependencies(): fills, for each of the
+     * nDependencies dependencies of 'dependent', the element of 'dependent' it
+     * belongs to (elementIndicesOfDependent), the independent variable and its
+     * element, and the kind. Element indices start at 1; 0 means all elements
+     * of a variable.
      * Throws std::logic_error by default.
      */
     virtual void GetVariableDependencies(
         FMIValueReference dependent,
-        const std::size_t elementIndicesOfDependent[],
+        std::size_t elementIndicesOfDependent[],
         FMIValueReference independents[],
         std::size_t elementIndicesOfIndependents[],
         FMIDependencyKind dependencyKinds[],
