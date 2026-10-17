@@ -22,6 +22,9 @@ public:
                 value_ = value[i];
             } else if (vr[i] == 2) {
                 seed_ = value[i];
+            } else if (vr[i] == 3) {
+                // A message that is undefined behaviour if used as a format.
+                throw std::runtime_error("%s%s%n");
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -174,6 +177,11 @@ public:
         cppfmu::FMIBoolean newStep,
         cppfmu::FMIReal& endOfStep) override
     {
+        // A step longer than 1.0 is discarded after 1.0.
+        if (communicationStepSize > 1.0) {
+            endOfStep = currentCommunicationPoint + 1.0;
+            return false;
+        }
         return true;
     }
 

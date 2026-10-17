@@ -24,6 +24,45 @@ extern "C" void logger(
     std::fprintf(stderr, "[%s] %s\n", category, message);
 }
 
+// Counts the messages it receives, so a test can assert that none arrived.
+int g_loggedMessages = 0;
+
+extern "C" void countingLogger(
+    fmi3InstanceEnvironment,
+    fmi3Status,
+    fmi3String,
+    fmi3String) noexcept
+{
+    ++g_loggedMessages;
+}
+
+fmi3Instance InstantiateCounted(fmi3Boolean loggingOn)
+{
+    return fmi3InstantiateCoSimulation(
+        TEST_INSTANCE_NAME,
+        "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+        "",
+        fmi3False,
+        loggingOn,
+        fmi3False,
+        fmi3False,
+        nullptr,
+        0,
+        nullptr,
+        &countingLogger,
+        nullptr);
+}
+
+// The number of messages a refused get of an unknown value reference logs.
+int MessagesFromUnknownGet(fmi3Instance instance)
+{
+    const fmi3ValueReference unknownVr = 999;
+    fmi3Float64 value = 0.0;
+    const int before = g_loggedMessages;
+    assert(fmi3GetFloat64(instance, &unknownVr, 1, &value, 1) == fmi3Error);
+    return g_loggedMessages - before;
+}
+
 int main()
 {
     // Instantiation and setup (FMI 3.0)
@@ -52,6 +91,31 @@ int main()
             fmi3False,
             0.0);
         assert(rc == fmi3OK);
+    }
+    // Directional derivatives reach the slave in Initialization Mode too
+    // (FMI 3.0, 2.3.3). Turn derivative support on for the call and off again,
+    // so the "not supported" checks below still see the default.
+    {
+        const fmi3ValueReference switchVr[] = {1, 2};
+        const fmi3Float64 on[] = {1.0, 3.0};
+        assert(fmi3SetFloat64(instance, switchVr, 2, on, 2) == fmi3OK);
+        const fmi3ValueReference vr[] = {0};
+        fmi3Float64 dvKnown[] = {2.0};
+        fmi3Float64 dvUnknown[] = {0.0};
+        const auto rc = fmi3GetDirectionalDerivative(
+            instance,
+            vr,
+            1,
+            vr,
+            1,
+            dvKnown,
+            1,
+            dvUnknown,
+            1);
+        assert(rc == fmi3OK);
+        assert(dvUnknown[0] == 6.0);
+        const fmi3Float64 off[] = {0.0, 1.0};
+        assert(fmi3SetFloat64(instance, switchVr, 2, off, 2) == fmi3OK);
     }
     {
         const auto rc = fmi3ExitInitializationMode(instance);
@@ -394,6 +458,40 @@ int main()
         assert(rc == fmi3Error);
     }
 
+    // Test fmi3GetVariableDependencies (success path): the slave fills all
+    // five buffers, including the dependent's element indices.
+    {
+        size_t nDeps = 0;
+        assert(
+            fmi3GetNumberOfVariableDependencies(instance, 10, &nDeps) ==
+            fmi3OK);
+        assert(nDeps == 2);
+
+        fmi3ValueReference independents[2] = {99, 99};
+        size_t elementIndicesOfDependent[2] = {99, 99};
+        size_t elementIndicesOfIndependents[2] = {99, 99};
+        fmi3DependencyKind dependencyKinds[2] = {
+            fmi3Independent,
+            fmi3Independent};
+        const auto rc = fmi3GetVariableDependencies(
+            instance,
+            10,
+            elementIndicesOfDependent,
+            independents,
+            elementIndicesOfIndependents,
+            dependencyKinds,
+            nDeps);
+        assert(rc == fmi3OK);
+        assert(elementIndicesOfDependent[0] == 1);
+        assert(elementIndicesOfDependent[1] == 2);
+        assert(independents[0] == 0);
+        assert(independents[1] == 3);
+        assert(elementIndicesOfIndependents[0] == 0);
+        assert(elementIndicesOfIndependents[1] == 1);
+        assert(dependencyKinds[0] == fmi3Dependent);
+        assert(dependencyKinds[1] == fmi3Discrete);
+    }
+
     // Test Event Mode lifecycle (success path — default implementations)
     {
         const auto rc = fmi3EnterEventMode(instance);
@@ -481,6 +579,156 @@ int main()
         assert(fmi3DoStep(eventInstance, 0.0, 0.1, fmi3False, &eventNeeded, &terminateSim,
             &early, &lastTime) == fmi3OK);
         fmi3FreeInstance(eventInstance);
+    }
+
+    // The FMU calls logMessage only when logging is on for the category, errors
+    // included (FMI 3.0, 2.3.1 and fmi3SetDebugLogging).
+    {
+        const auto quiet = InstantiateCounted(fmi3False);
+        assert(quiet);
+        assert(MessagesFromUnknownGet(quiet) == 0);
+        fmi3FreeInstance(quiet);
+
+        const auto loud = InstantiateCounted(fmi3True);
+        assert(loud);
+        assert(MessagesFromUnknownGet(loud) > 0);
+        assert(fmi3SetDebugLogging(loud, fmi3False, 0, nullptr) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) == 0);
+        const char* other[] = {"someOtherCategory"};
+        assert(fmi3SetDebugLogging(loud, fmi3True, 1, other) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) == 0);
+        const char* cppfmu[] = {"cppfmu"};
+        assert(fmi3SetDebugLogging(loud, fmi3True, 1, cppfmu) == fmi3OK);
+        assert(MessagesFromUnknownGet(loud) > 0);
+        fmi3FreeInstance(loud);
+
+        const int before = g_loggedMessages;
+        assert(
+            fmi3InstantiateModelExchange(
+                TEST_INSTANCE_NAME,
+                "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+                "",
+                fmi3False,
+                fmi3False,
+                nullptr,
+                &countingLogger) == nullptr);
+        assert(g_loggedMessages == before);
+    }
+
+    // A restored FMU state brings back the mode it was taken in (FMI 3.0,
+    // 2.2.6). This is how fmusim --initial-fmu-state-file starts: a fresh
+    // instance deserializes and sets a Step-mode state, then steps.
+    {
+        const auto source = InstantiateCounted(fmi3False);
+        assert(source);
+        assert(
+            fmi3EnterInitializationMode(
+                source,
+                fmi3False,
+                0.0,
+                0.0,
+                fmi3False,
+                0.0) == fmi3OK);
+        assert(fmi3ExitInitializationMode(source) == fmi3OK);
+        const fmi3ValueReference vr = 0;
+        const fmi3Float64 saved = 42.0;
+        assert(fmi3SetFloat64(source, &vr, 1, &saved, 1) == fmi3OK);
+        fmi3FMUState state = nullptr;
+        assert(fmi3GetFMUState(source, &state) == fmi3OK);
+        std::size_t size = 0;
+        assert(fmi3SerializedFMUStateSize(source, state, &size) == fmi3OK);
+        std::vector<fmi3Byte> bytes(size);
+        assert(
+            fmi3SerializeFMUState(source, state, bytes.data(), bytes.size()) ==
+            fmi3OK);
+
+        // Taken again into the same handle, from Terminated, the state
+        // records the new mode.
+        assert(fmi3Terminate(source) == fmi3OK);
+        assert(fmi3GetFMUState(source, &state) == fmi3OK);
+        assert(fmi3SetFMUState(source, state) == fmi3OK);
+        fmi3Boolean eventNeeded, terminateSim, early;
+        fmi3Float64 lastTime;
+        assert(
+            fmi3DoStep(
+                source,
+                0.0,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3Error);
+        assert(fmi3FreeFMUState(source, &state) == fmi3OK);
+        fmi3FreeInstance(source);
+
+        const auto target = InstantiateCounted(fmi3False);
+        assert(target);
+        fmi3FMUState restored = nullptr;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                bytes.data(),
+                bytes.size(),
+                &restored) == fmi3OK);
+        assert(fmi3SetFMUState(target, restored) == fmi3OK);
+        assert(
+            fmi3DoStep(
+                target,
+                0.0,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3OK);
+        fmi3Float64 value = 0.0;
+        assert(fmi3GetFloat64(target, &vr, 1, &value, 1) == fmi3OK);
+        assert(value == saved);
+        assert(fmi3FreeFMUState(target, &restored) == fmi3OK);
+
+        // Bytes that are not a state serialized by this FMU are refused, and
+        // the instance is not failed by them.
+        std::vector<fmi3Byte> foreign(bytes);
+        foreign[0] ^= 0xFF;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                foreign.data(),
+                foreign.size(),
+                &restored) == fmi3Error);
+        assert(restored == nullptr);
+        std::vector<fmi3Byte> newer(bytes);
+        newer[4] += 1;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                newer.data(),
+                newer.size(),
+                &restored) == fmi3Error);
+        std::vector<fmi3Byte> badMode(bytes);
+        badMode[5] = 0;
+        assert(
+            fmi3DeserializeFMUState(
+                target,
+                badMode.data(),
+                badMode.size(),
+                &restored) == fmi3Error);
+        assert(
+            fmi3DeserializeFMUState(target, bytes.data(), 3, &restored) ==
+            fmi3Error);
+        assert(restored == nullptr);
+        assert(
+            fmi3DoStep(
+                target,
+                0.1,
+                0.1,
+                fmi3False,
+                &eventNeeded,
+                &terminateSim,
+                &early,
+                &lastTime) == fmi3OK);
+        fmi3FreeInstance(target);
     }
 
     return 0;

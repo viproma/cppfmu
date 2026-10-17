@@ -22,6 +22,13 @@
         canGetAndSetFMUstate="false"
         canSerializeFMUstate="false"/>
 
+    <!-- CPPFMU logs its own messages (errors from the slave's exceptions,
+         refused calls) with this category. It is "cppfmu" unless the wrapper
+         is compiled with CPPFMU_LOG_CATEGORY defined to something else. -->
+    <LogCategories>
+        <Category name="cppfmu" description="Errors reported by CPPFMU"/>
+    </LogCategories>
+
     <ModelVariables>
         <!-- Parameters -->
         <ScalarVariable name="mass" valueReference="0" causality="parameter"

@@ -31,16 +31,96 @@ Unreleased
   sets the FMU opened the update for are legal, gets before sets; output
   derivatives have their own `LifecycleCall::OutputDerivatives` rule. Existing
   slaves are unaffected.
+- `CPPFMU_LOG_CATEGORY` sets the log category of the messages the FMI 2.0 and
+  FMI 3.0 wrappers log themselves. It defaults to `"cppfmu"`. Define it as a
+  string literal when compiling `fmi_functions.cpp` or `fmi3_functions.cpp`.
+  The FMU's `modelDescription.xml` must declare the category under
+  `<LogCategories>`; the examples now do. An FMU that declares no categories
+  defines it as `NULL`, which FMI 2.0 and FMI 3.0 require; the loggers now
+  accept a NULL category (issue #8).
 
 ### Changed
+- FMI 2.0: calls made in a Co-Simulation state that does not allow them
+  (4.2.4) are refused with `fmi2Error` and never reach the slave, for example
+  `fmi2DoStep` before `fmi2ExitInitializationMode` or after `fmi2Terminate`,
+  `fmi2EnterInitializationMode` twice, or `fmi2GetReal` before
+  `fmi2EnterInitializationMode`. FMI 2.0 leaves such calls undefined, so the
+  checks are lenient and never refuse an allowed call: stepFailed, error and
+  fatal are not tracked (a discarded step or an error does not change the
+  state), and after `fmi2SetFMUstate` every call is allowed until the instance
+  reaches a known state again, so an importer can set a saved state into a
+  fresh instance and step on. **Importers that relied on illegal calls being
+  accepted now get `fmi2Error`.** FMI 1.0 is unchanged.
+- FMI 2.0: the FMU calls the logger only while logging is on for the message's
+  category -- `loggingOn` at instantiation, then `fmi2SetDebugLogging` -- for
+  every status, as FMI 2.0 recommends (2.1.5) and as the FMI 3.0 wrapper does.
+  This applies to messages from the slave through `cppfmu::Logger::Log()` as
+  well as to CPPFMU's own error messages, including those from a failed
+  `fmi2Instantiate`. **Importers that instantiate with `loggingOn = fmi2False`
+  no longer see the FMU's error messages.** `Logger::DebugLog()` now does the
+  same as `Logger::Log()`. FMI 1.0 is unchanged.
+- FMI 3.0: the FMU calls `logMessage` only while logging is on for the
+  message's category -- `loggingOn` at instantiation, then
+  `fmi3SetDebugLogging` -- for every status. Errors and fatal errors used to be
+  logged whatever the settings, which FMI 3.0 forbids (2.3.1). This includes the
+  messages from a failed `fmi3InstantiateCoSimulation` and from a refused
+  `fmi3InstantiateModelExchange` or `fmi3InstantiateScheduledExecution`.
+  Slaves that rely on errors always reaching the importer must have the
+  importer turn logging on; cacofu's `CppfmuInstantiateSlave` is one.
 - FMI 3.0 lifecycle handling extracted into a separate, testable `Lifecycle`
   module (`cppfmu_lifecycle_fmi3.{hpp,cpp}`). It holds the whole FMI 3.0
-  Co-Simulation state graph in one transition table and is FMI 3.0 only; the
-  FMI 1.0/2.0 implementation has no state machine.
+  Co-Simulation state graph in one transition table and is FMI 3.0 only.
 - FMI 1.0/2.0 C API dispatch centralised behind a `RunCall` helper, removing the
   repeated exception-handling boilerplate from every wrapper function.
 
 ### Fixed
+- FMI 2.0: `fmi2Instantiate` no longer crashes when `allocateMemory` and
+  `freeMemory` are NULL, which FMI 2.0 allows for an FMU that declares
+  `canNotUseMemoryManagementFunctions` (2.1.5). `cppfmu::Memory` falls back to
+  `std::calloc` and `std::free`. fmusim always passes NULL callbacks, so it can
+  now run FMI 2.0 FMUs built with CPPFMU.
+- FMI 1.0/2.0: `fmi2FreeInstance(NULL)` and `fmiFreeSlaveInstance(NULL)` are
+  ignored instead of crashing (2.1.5).
+- FMI 2.0: `fmi2FreeFMUstate` with a NULL state returns `fmi2OK` and does
+  nothing, instead of `fmi2Error` (2.1.8).
+- FMI 1.0/2.0: an exception message is passed to the logger as the printf
+  format with every `%` doubled, so a `%` in it is no longer undefined
+  behaviour, and importers whose logger does not expand the format (FMPy)
+  show the message rather than a literal `%s`. A non-`std::exception` thrown
+  during instantiation no longer escapes `fmi2Instantiate`/`fmiInstantiateSlave`. Errors from `fmi2Instantiate` and `fmi2DoStep`/`fmiDoStep` are
+  logged with CPPFMU's category instead of `""`, and `fmi2Instantiate`
+  passes the importer's `componentEnvironment` to the logger instead of NULL.
+- FMI 2.0: `fmi2DoStep` refuses a `communicationStepSize` that is not greater
+  than zero with `fmi2Error`, as `fmi3DoStep` does (4.2.2).
+- FMI 2.0: `fmi2GetBooleanStatus(fmi2Terminated)` returns `fmi2OK` and
+  `fmi2False` instead of `fmi2Error`. fmusim and FMPy ask for it after every
+  `fmi2Discard` from `fmi2DoStep`, so a discarded step used to end their run with
+  an error.
+- FMI 3.0: `SlaveInstance3::GetVariableDependencies()` takes
+  `elementIndicesOfDependent` as `std::size_t[]` instead of
+  `const std::size_t[]`. It is an output buffer that the FMU fills (FMI 3.0,
+  2.2.9), as the `fmi3GetVariableDependencies` C function declares it, so a
+  slave could not fill it without a `const_cast`. **Source-incompatible:** a
+  slave that overrides the function must drop the `const` from that parameter,
+  or its `override` no longer compiles.
+- FMI 3.0: an FMU state restored with `fmi3SetFMUState` now restores the mode
+  it was taken in, as FMI 3.0 requires a state to hold everything needed to
+  continue from it (2.2.6). A Step Mode state set into a freshly instantiated
+  FMU, as `fmusim --initial-fmu-state-file` does, used to leave the instance in
+  Instantiated so the next `fmi3DoStep` was refused. CPPFMU now wraps the
+  slave's state together with the mode, and `fmi3SerializeFMUState` writes a
+  6-byte header (magic, format version, mode) before the slave's bytes, so
+  **states serialized by earlier versions are refused**. The slave API is
+  unchanged, but a slave's state must hold whatever `EnterInitializationMode`
+  and `ExitInitializationMode` set up, since a restored instance may never
+  have had them called. `Lifecycle::RestoreFromSnapshot()` takes the saved
+  mode; restoring a Step Mode state still recovers a failed instance.
+- FMI 3.0: `fmi3GetDirectionalDerivative` and `fmi3GetAdjointDerivative` are
+  accepted in Initialization, Event and Terminated Mode as well as Step Mode, as
+  FMI 3.0 requires; they were refused outside Step Mode. `LifecycleCall::StepModeQuery`
+  is renamed `DerivativeQuery`. A slave that cannot answer in one of the new
+  modes throws `std::logic_error` from its override, which refuses the call
+  without failing the instance.
 - The Conan `generate()` snippet in the README no longer has its `if` statement
   dedented out of the enclosing `for` loop, which silently prevented the C API
   wrapper from being copied; and the file it names is `fmi_functions.cpp`, not

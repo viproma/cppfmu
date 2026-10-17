@@ -76,12 +76,41 @@ this for you. The `cppfmu::Lifecycle` class
 in one transition table: a call made in a state that does not allow it is
 refused with `fmi3Error` and never reaches your slave, and a call that throws
 something other than a refusal puts the instance in a failed state, from which
-only freeing, resetting or restoring a saved FMU state escapes. Your slave code
-therefore does not need to check the current mode itself.
+only freeing, resetting or restoring a saved FMU state escapes. A saved FMU
+state records the mode it was taken in, and restoring it puts the instance back
+in that mode, so an importer can restore a Step Mode state into a freshly
+instantiated FMU and step on (as `fmusim --initial-fmu-state-file` does). Your
+slave code therefore does not need to check the current mode itself. The
+exception is `GetDirectionalDerivative` and `GetAdjointDerivative`, which FMI
+3.0 allows in Initialization, Step, Event and Terminated Mode: a slave that
+cannot answer in one of them throws `std::logic_error`, which refuses the call
+without failing the instance.
 
-This applies to FMI 3.0 only; the FMI 1.0/2.0 implementation has no state
-machine. When you compile CPPFMU by hand rather than through Conan, remember to
-compile `cppfmu_lifecycle_fmi3.cpp` alongside `cppfmu_cs_fmi3.cpp`.
+When you compile CPPFMU by hand rather than through Conan, remember to compile
+`cppfmu_lifecycle_fmi3.cpp` alongside `cppfmu_cs_fmi3.cpp`.
+
+### FMI 2.0 state checks
+
+The FMI 2.0 wrapper (`fmi_functions.cpp`) also refuses, with `fmi2Error`, a call
+made in a Co-Simulation state that does not allow it (FMI 2.0, 4.2.4), such as
+`fmi2DoStep` before `fmi2ExitInitializationMode` or after `fmi2Terminate`, or a
+second `fmi2EnterInitializationMode`. A refused call never reaches your slave.
+FMI 2.0 leaves such calls undefined rather than requiring the refusal, so the
+checks are lenient, and never refuse a call FMI 2.0 allows:
+
+- Only Instantiated, Initialization Mode, stepComplete and Terminated are told
+  apart. A discarded step leaves the instance in stepComplete, and an error
+  leaves it where it was, since FMI 2.0 is not consistent about what may follow
+  them.
+- FMI 2.0 FMU states do not record the state they were taken in, so after
+  `fmi2SetFMUstate` every call is allowed until the instance reaches a known
+  state again (for example with `fmi2DoStep` or `fmi2Reset`). An importer can
+  therefore set a saved state into a fresh instance and step on.
+- Calls whose legality depends on a variable's causality or `initial`
+  attribute, such as `fmi2SetReal` before initialization, are allowed for every
+  variable; check those in your slave if you need to.
+
+FMI 1.0 is not checked.
 
 ### Why `SlaveInstance3` Instead of Extending `SlaveInstance`?
 
@@ -405,6 +434,33 @@ The `Logger` class is defined and documented in `cppfmu_common.hpp`.
 **FMI 3.0** uses a different logger signature (no varargs, no instance
 name parameter).  A `Logger3` class is provided in `cppfmu_common.hpp`
 for this purpose.
+
+In FMI 2.0 and FMI 3.0, a message reaches the importer only if logging is on
+for its category: `loggingOn` at instantiation, then whatever
+`fmi2SetDebugLogging` or `fmi3SetDebugLogging` last set. This holds for every
+status, errors and fatal errors included, as FMI 3.0 requires and FMI 2.0
+recommends, so an importer that turns logging off sees no messages from the
+FMU. In FMI 2.0, `Logger::Log()` and `Logger::DebugLog()` therefore do the same.
+The FMI 1.0 wrapper still passes errors on whatever the settings, since FMI 1.0's
+`loggingOn` only controls debug logging.
+
+The messages CPPFMU logs itself (errors from the slave's exceptions, refused
+calls, unsupported functions) use the category `"cppfmu"`. To use another
+category, define `CPPFMU_LOG_CATEGORY` as a string literal when you compile
+`fmi_functions.cpp` or `fmi3_functions.cpp`, for example
+`target_compile_definitions(my_fmu PRIVATE CPPFMU_LOG_CATEGORY="myModel")`.
+Whichever category is used, declare it in `modelDescription.xml`, together
+with any categories the slave logs with, so that the importer can turn it on:
+
+```xml
+<LogCategories>
+    <Category name="cppfmu" description="Errors reported by CPPFMU"/>
+</LogCategories>
+```
+
+FMI 2.0 and FMI 3.0 allow only declared categories, and require a NULL category
+from an FMU that declares none. For such an FMU, define
+`CPPFMU_LOG_CATEGORY=NULL`, and log with a NULL category from the slave too.
 
 Licence
 -------
