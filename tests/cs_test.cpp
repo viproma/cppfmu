@@ -52,8 +52,10 @@ extern "C" void logger(
 const double TEST_VALUE = 2.0;
 const char* const TEST_INSTANCE_NAME = "MyInstance";
 
-// The last message and category the FMU logged, formatted.
+// The last message and category the FMU logged, formatted, and the format
+// as the FMU passed it (what a logger that does not format shows).
 std::string lastLogMessage;
+std::string lastLogFormat;
 std::string lastLogCategory;
 
 
@@ -72,6 +74,7 @@ extern "C" void logger(
     std::vsnprintf(buffer, sizeof buffer, message, args);
     va_end(args);
     lastLogMessage = buffer;
+    lastLogFormat = message;
     lastLogCategory = category ? category : "(null)";
     std::fprintf(stderr, "%s\n", buffer);
 }
@@ -444,6 +447,9 @@ int main()
         const auto rc = fmi2SetReal(instance, &throwingVr, 1, &val);
         assert(rc == fmi2Error);
         assert(lastLogMessage == "fmi2SetReal: %s%s%n");
+        // The text is the format, with '%' doubled, so that a logger that
+        // does not format shows the text too.
+        assert(lastLogFormat == "fmi2SetReal: %%s%%s%%n");
         assert(
             lastLogCategory ==
             (wrapperCategory ? wrapperCategory : std::string("(null)")));
@@ -524,6 +530,101 @@ int main()
 
     // Freeing a NULL instance is ignored.
     fmi2FreeInstance(nullptr);
+
+    // The FMI 2.0 Co-Simulation state machine (4.2.4): a call made in a
+    // state that does not allow it is refused, and changes nothing.
+    {
+        const auto inst = fmi2Instantiate(
+            TEST_INSTANCE_NAME,
+            fmi2CoSimulation,
+            "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+            nullptr,
+            &callbacks,
+            fmi2False,
+            fmi2True);
+        assert(inst);
+        fmi2Real val = 0.0;
+
+        // Instantiated
+        assert(fmi2DoStep(inst, 0.0, 0.1, fmi2False) == fmi2Error); // S001
+        assert(
+            lastLogMessage ==
+            "fmi2DoStep: was called in a state that does not allow it");
+        assert(fmi2ExitInitializationMode(inst) == fmi2Error); // S002
+        assert(fmi2GetReal(inst, &validVr, 1, &val) == fmi2Error);
+        assert(fmi2SetReal(inst, &validVr, 1, &value1) == fmi2OK);
+        assert(
+            fmi2SetupExperiment(inst, fmi2False, 0.0, 0.0, fmi2False, 0.0) ==
+            fmi2OK);
+        assert(fmi2EnterInitializationMode(inst) == fmi2OK);
+
+        // Initialization Mode
+        assert(fmi2DoStep(inst, 0.0, 0.1, fmi2False) == fmi2Error); // S003
+        assert(fmi2EnterInitializationMode(inst) == fmi2Error);     // S004
+        assert(
+            fmi2SetupExperiment(inst, fmi2False, 0.0, 0.0, fmi2False, 0.0) ==
+            fmi2Error);
+        assert(fmi2GetReal(inst, &validVr, 1, &val) == fmi2OK);
+        assert(val == value1);
+        assert(fmi2ExitInitializationMode(inst) == fmi2OK);
+
+        // stepComplete
+        assert(fmi2EnterInitializationMode(inst) == fmi2Error); // S005
+        assert(fmi2ExitInitializationMode(inst) == fmi2Error);  // S006
+        assert(fmi2DoStep(inst, 0.0, 0.1, fmi2False) == fmi2OK);
+
+        // A discarded step still allows the next one; FMI 2.0 is not clear
+        // about what may follow a discard, so nothing is refused after one.
+        assert(fmi2DoStep(inst, 0.1, 2.0, fmi2False) == fmi2Discard);
+        fmi2Boolean terminated = fmi2True;
+        assert(
+            fmi2GetBooleanStatus(inst, fmi2Terminated, &terminated) == fmi2OK);
+        assert(terminated == fmi2False);
+        fmi2Real lastTime = 0.0;
+        assert(
+            fmi2GetRealStatus(inst, fmi2LastSuccessfulTime, &lastTime) ==
+            fmi2OK);
+        assert(lastTime == 1.1);
+        assert(fmi2DoStep(inst, 1.1, 0.1, fmi2False) == fmi2OK);
+
+        // An error does not change the state either.
+        const fmi2ValueReference throwingVr = 3;
+        assert(fmi2SetReal(inst, &throwingVr, 1, &value1) == fmi2Error);
+        assert(fmi2DoStep(inst, 1.2, 0.1, fmi2False) == fmi2OK);
+
+        fmi2FMUstate stepState = nullptr;
+        assert(fmi2GetFMUstate(inst, &stepState) == fmi2OK);
+        assert(fmi2Terminate(inst) == fmi2OK);
+
+        // Terminated
+        assert(fmi2DoStep(inst, 1.3, 0.1, fmi2False) == fmi2Error); // S008
+        assert(fmi2SetReal(inst, &validVr, 1, &value2) == fmi2Error);
+        assert(fmi2Terminate(inst) == fmi2Error);
+        assert(fmi2GetReal(inst, &validVr, 1, &val) == fmi2OK);
+        assert(val == value1);
+
+        // Reset leads back to Instantiated, and a new run works.
+        assert(fmi2Reset(inst) == fmi2OK);
+        assert(fmi2DoStep(inst, 0.0, 0.1, fmi2False) == fmi2Error);
+        assert(fmi2EnterInitializationMode(inst) == fmi2OK);
+        assert(fmi2ExitInitializationMode(inst) == fmi2OK);
+        assert(fmi2DoStep(inst, 0.0, 0.1, fmi2False) == fmi2OK);
+
+        // A state set into a freshly reset instance, as fmusim
+        // --initial-fmu-state-file does, can be stepped on at once: the
+        // state does not record its mode, so every call is allowed until
+        // the instance reaches a known one.
+        assert(fmi2Reset(inst) == fmi2OK);
+        assert(fmi2SetFMUstate(inst, stepState) == fmi2OK);
+        assert(fmi2GetReal(inst, &validVr, 1, &val) == fmi2OK);
+        assert(fmi2DoStep(inst, 1.3, 0.1, fmi2False) == fmi2OK);
+        // ... after which it is in stepComplete again.
+        assert(fmi2EnterInitializationMode(inst) == fmi2Error);
+        assert(fmi2FreeFMUstate(inst, &stepState) == fmi2OK);
+
+        std::fprintf(stderr, "(The errors above were expected.)\n");
+        fmi2FreeInstance(inst);
+    }
 
     // NULL memory callbacks are allowed when the FMU declares
     // canNotUseMemoryManagementFunctions (fmusim always passes NULL).

@@ -86,9 +86,31 @@ exception is `GetDirectionalDerivative` and `GetAdjointDerivative`, which FMI
 cannot answer in one of them throws `std::logic_error`, which refuses the call
 without failing the instance.
 
-This applies to FMI 3.0 only; the FMI 1.0/2.0 implementation has no state
-machine. When you compile CPPFMU by hand rather than through Conan, remember to
-compile `cppfmu_lifecycle_fmi3.cpp` alongside `cppfmu_cs_fmi3.cpp`.
+When you compile CPPFMU by hand rather than through Conan, remember to compile
+`cppfmu_lifecycle_fmi3.cpp` alongside `cppfmu_cs_fmi3.cpp`.
+
+### FMI 2.0 state checks
+
+The FMI 2.0 wrapper (`fmi_functions.cpp`) also refuses, with `fmi2Error`, a call
+made in a Co-Simulation state that does not allow it (FMI 2.0, 4.2.4), such as
+`fmi2DoStep` before `fmi2ExitInitializationMode` or after `fmi2Terminate`, or a
+second `fmi2EnterInitializationMode`. A refused call never reaches your slave.
+FMI 2.0 leaves such calls undefined rather than requiring the refusal, so the
+checks are lenient, and never refuse a call FMI 2.0 allows:
+
+- Only Instantiated, Initialization Mode, stepComplete and Terminated are told
+  apart. A discarded step leaves the instance in stepComplete, and an error
+  leaves it where it was, since FMI 2.0 is not consistent about what may follow
+  them.
+- FMI 2.0 FMU states do not record the state they were taken in, so after
+  `fmi2SetFMUstate` every call is allowed until the instance reaches a known
+  state again (for example with `fmi2DoStep` or `fmi2Reset`). An importer can
+  therefore set a saved state into a fresh instance and step on.
+- Calls whose legality depends on a variable's causality or `initial`
+  attribute, such as `fmi2SetReal` before initialization, are allowed for every
+  variable; check those in your slave if you need to.
+
+FMI 1.0 is not checked.
 
 ### Why `SlaveInstance3` Instead of Extending `SlaveInstance`?
 

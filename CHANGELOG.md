@@ -40,6 +40,17 @@ Unreleased
   accept a NULL category (issue #8).
 
 ### Changed
+- FMI 2.0: calls made in a Co-Simulation state that does not allow them
+  (4.2.4) are refused with `fmi2Error` and never reach the slave, for example
+  `fmi2DoStep` before `fmi2ExitInitializationMode` or after `fmi2Terminate`,
+  `fmi2EnterInitializationMode` twice, or `fmi2GetReal` before
+  `fmi2EnterInitializationMode`. FMI 2.0 leaves such calls undefined, so the
+  checks are lenient and never refuse an allowed call: stepFailed, error and
+  fatal are not tracked (a discarded step or an error does not change the
+  state), and after `fmi2SetFMUstate` every call is allowed until the instance
+  reaches a known state again, so an importer can set a saved state into a
+  fresh instance and step on. **Importers that relied on illegal calls being
+  accepted now get `fmi2Error`.** FMI 1.0 is unchanged.
 - FMI 2.0: the FMU calls the logger only while logging is on for the message's
   category -- `loggingOn` at instantiation, then `fmi2SetDebugLogging` -- for
   every status, as FMI 2.0 recommends (2.1.5) and as the FMI 3.0 wrapper does.
@@ -58,8 +69,7 @@ Unreleased
   importer turn logging on; cacofu's `CppfmuInstantiateSlave` is one.
 - FMI 3.0 lifecycle handling extracted into a separate, testable `Lifecycle`
   module (`cppfmu_lifecycle_fmi3.{hpp,cpp}`). It holds the whole FMI 3.0
-  Co-Simulation state graph in one transition table and is FMI 3.0 only; the
-  FMI 1.0/2.0 implementation has no state machine.
+  Co-Simulation state graph in one transition table and is FMI 3.0 only.
 - FMI 1.0/2.0 C API dispatch centralised behind a `RunCall` helper, removing the
   repeated exception-handling boilerplate from every wrapper function.
 
@@ -73,9 +83,11 @@ Unreleased
   ignored instead of crashing (2.1.5).
 - FMI 2.0: `fmi2FreeFMUstate` with a NULL state returns `fmi2OK` and does
   nothing, instead of `fmi2Error` (2.1.8).
-- FMI 1.0/2.0: an exception message is passed to the logger as a `"%s"`
-  argument, not as the printf format, so a `%` in it is no longer undefined
-  behaviour. Errors from `fmi2Instantiate` and `fmi2DoStep`/`fmiDoStep` are
+- FMI 1.0/2.0: an exception message is passed to the logger as the printf
+  format with every `%` doubled, so a `%` in it is no longer undefined
+  behaviour, and importers whose logger does not expand the format (FMPy)
+  show the message rather than a literal `%s`. A non-`std::exception` thrown
+  during instantiation no longer escapes `fmi2Instantiate`/`fmiInstantiateSlave`. Errors from `fmi2Instantiate` and `fmi2DoStep`/`fmiDoStep` are
   logged with CPPFMU's category instead of `""`, and `fmi2Instantiate`
   passes the importer's `componentEnvironment` to the logger instead of NULL.
 - FMI 2.0: `fmi2DoStep` refuses a `communicationStepSize` that is not greater
