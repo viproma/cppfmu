@@ -158,6 +158,24 @@ public:
 };
 
 
+/* Exception class that signals "discard": the call failed but changed
+ * nothing, so the importer may go on, for example with other arguments or a
+ * smaller step. Throw it only after undoing whatever the call had done.
+ *
+ * FMI 3.0 allows fmi3Discard from every function. FMI 2.0 allows fmi2Discard
+ * only from some (2.1.3), in Co-Simulation from the variable setters and
+ * fmi2DoStep, and FMI 1.0 fmiDiscard only from fmiDoStep. From any other
+ * function this exception becomes an error, which FMI 2.0 lets an importer
+ * recover from with fmi2SetFMUstate or fmi2Reset.
+ */
+class DiscardError : public std::runtime_error
+{
+public:
+    DiscardError(const char* msg) CPPFMU_NOEXCEPT : std::runtime_error{msg} { }
+    DiscardError(const std::string& msg) : std::runtime_error{msg} { }
+};
+
+
 /* An alias for a std::unique_ptr specialisation where the deleter is general
  * and independent of the type of the object pointed to.
  */

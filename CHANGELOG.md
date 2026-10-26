@@ -15,6 +15,15 @@ Unreleased
 ----------
 
 ### Added
+- `cppfmu::DiscardError`, for a call that failed but changed nothing, so that
+  the importer may go on, for example with other arguments or a smaller step.
+  It becomes `fmi3Discard` from every FMI 3.0 function, and leaves the
+  instance in its state. FMI 2.0 allows `fmi2Discard` only from some
+  functions (2.1.3): it becomes `fmi2Discard` from the variable setters and
+  `fmi2DoStep`, and `fmi2Error` from any other function. In FMI 1.0 it becomes
+  `fmiDiscard` from `fmiDoStep` only. Thrown from `DoStep`, it means the slave
+  did not step at all: the last successful time is the start of the step.
+  The message is logged with the Discard status under `CPPFMU_LOG_CATEGORY`.
 - Combined FMI 2.0 + FMI 3.0 build, selected with the Conan option
   `use_fmi_version="all"`. The resulting package ships both C API wrappers and
   sets no version macro, so a single package can serve one consumer that builds

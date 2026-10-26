@@ -57,6 +57,7 @@ const char* const TEST_INSTANCE_NAME = "MyInstance";
 std::string lastLogMessage;
 std::string lastLogFormat;
 std::string lastLogCategory;
+fmi2Status lastLogStatus = fmi2OK;
 
 
 extern "C" void logger(
@@ -76,6 +77,7 @@ extern "C" void logger(
     lastLogMessage = buffer;
     lastLogFormat = message;
     lastLogCategory = category ? category : "(null)";
+    lastLogStatus = status;
     std::fprintf(stderr, "%s\n", buffer);
 }
 #endif
@@ -438,6 +440,34 @@ int main()
         assert(rc == fmi2Error);
         std::fprintf(stderr, "(The last error was expected.)\n");
         assert(val == -1.0);
+    }
+
+    // A DiscardError is fmi2Discard from the setters and fmi2DoStep, which FMI
+    // 2.0 lets return it in Co-Simulation, and fmi2Error from a getter, which
+    // it does not (2.1.3). The instance goes on either way.
+    {
+        const fmi2ValueReference discardVr = 4;
+        const fmi2Real negative = -1.0;
+        assert(fmi2SetReal(instance, &discardVr, 1, &negative) == fmi2Discard);
+        assert(lastLogStatus == fmi2Discard);
+        assert(lastLogMessage == "fmi2SetReal: vr 4 must not be negative");
+
+        fmi2Real val = -1.0;
+        assert(fmi2GetReal(instance, &discardVr, 1, &val) == fmi2Error);
+        assert(lastLogStatus == fmi2Error);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+
+        assert(fmi2DoStep(instance, 0.1, 0.25, fmi2True) == fmi2Discard);
+        assert(lastLogStatus == fmi2Discard);
+        fmi2Real last = -1.0;
+        assert(
+            fmi2GetRealStatus(instance, fmi2LastSuccessfulTime, &last) ==
+            fmi2OK);
+        assert(last == 0.1);
+
+        assert(fmi2DoStep(instance, 0.1, 0.1, fmi2True) == fmi2OK);
+        assert(fmi2GetReal(instance, &validVr, 1, &val) == fmi2OK);
+        assert(val == value1);
     }
 
     // An exception message is logged as text, not used as a printf format.

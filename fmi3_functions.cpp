@@ -286,6 +286,23 @@ void ReportError(const Component& component, const char* message)
     }
 }
 
+/* Tells the host which call was discarded (it failed but changed nothing) and
+ * why. */
+void ReportDiscard(
+    const Component& component,
+    const char* functionName,
+    const char* reason)
+{
+    try {
+        component.Log(
+            fmi3Discard,
+            CPPFMU_LOG_CATEGORY,
+            (std::string(functionName) + ": " + reason).c_str());
+    } catch (...) {
+        // There is nothing left to report a failed report with.
+    }
+}
+
 /* Tells the host which call was refused and why. */
 void ReportRefusal(
     const Component& component,
@@ -326,9 +343,10 @@ fmi3Status ReportInvalidArgument(
  * call the slave threw a std::logic_error out of -- an unknown value reference,
  * a restore with nothing live to restore into -- is a violated precondition,
  * not a misbehaving simulation, and is refused the way an argument is:
- * fmi3Error, instance left as it was. Any other std::exception, or a
- * non-exception, leaves the instance failed. A cppfmu::FatalError takes the
- * whole environment down with fmi3Fatal.
+ * fmi3Error, instance left as it was. A cppfmu::DiscardError is a call that
+ * failed but changed nothing: fmi3Discard, instance left as it was. Any other
+ * std::exception, or a non-exception, leaves the instance failed. A
+ * cppfmu::FatalError takes the whole environment down with fmi3Fatal.
  */
 template<typename Operation>
 fmi3Status RunLegalCall(
@@ -356,6 +374,9 @@ fmi3Status RunLegalCall(
         ReportError(*component, e.what());
         component->lifecycle.Fail();
         return fmi3Fatal;
+    } catch (const cppfmu::DiscardError& e) {
+        ReportDiscard(*component, functionName, e.what());
+        return fmi3Discard;
     } catch (const std::logic_error& e) {
         // A precondition the call itself violated (std::out_of_range is a
         // std::logic_error, so this catches that too). Refused, instance left as
@@ -1786,6 +1807,16 @@ fmi3Status fmi3DoStep(
         component->lifecycle.Fail();
         if (lastSuccessfulTime) *lastSuccessfulTime = currentCommunicationPoint;
         return fmi3Fatal;
+    } catch (const cppfmu::DiscardError& e) {
+        // The slave did not step at all; the instance stays in Step Mode.
+        ReportDiscard(*component, "fmi3DoStep", e.what());
+        if (eventHandlingNeeded) *eventHandlingNeeded = fmi3False;
+        if (terminateSimulation) *terminateSimulation = fmi3False;
+        if (earlyReturn) *earlyReturn = fmi3False;
+        if (lastSuccessfulTime) *lastSuccessfulTime = currentCommunicationPoint;
+        component->lastSuccessfulTime =
+            static_cast<cppfmu::FMIReal>(currentCommunicationPoint);
+        return fmi3Discard;
     } catch (const std::exception& e) {
         ReportError(*component, e.what());
         component->lifecycle.Fail();

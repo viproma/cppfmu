@@ -15,12 +15,18 @@
 const double TEST_VALUE = 2.0;
 const char* const TEST_INSTANCE_NAME = "MyInstance";
 
+// The status and message of the last message logged through logger.
+fmi3Status lastLogStatus = fmi3OK;
+std::string lastLogMessage;
+
 extern "C" void logger(
     fmi3InstanceEnvironment,
     fmi3Status status,
     fmi3String category,
     fmi3String message) noexcept
 {
+    lastLogStatus = status;
+    lastLogMessage = message;
     std::fprintf(stderr, "[%s] %s\n", category, message);
 }
 
@@ -309,6 +315,55 @@ int main()
         assert(rc == fmi3Error);
         std::fprintf(stderr, "(The last error was expected.)\n");
         assert(val == -1.0);
+    }
+
+    // A DiscardError is fmi3Discard from any function, and leaves the instance
+    // usable: it is in Step Mode still.
+    {
+        const fmi3ValueReference discardVr = 4;
+        const fmi3Float64 negative = -1.0;
+        assert(
+            fmi3SetFloat64(instance, &discardVr, 1, &negative, 1) ==
+            fmi3Discard);
+        assert(lastLogStatus == fmi3Discard);
+        assert(lastLogMessage == "fmi3SetFloat64: vr 4 must not be negative");
+
+        fmi3Float64 val = -1.0;
+        assert(fmi3GetFloat64(instance, &discardVr, 1, &val, 1) == fmi3Discard);
+        assert(lastLogStatus == fmi3Discard);
+
+        fmi3Boolean eventHandlingNeeded = fmi3True;
+        fmi3Boolean terminateSimulation = fmi3True;
+        fmi3Boolean earlyReturn = fmi3True;
+        fmi3Float64 lastSuccessfulTime = -1.0;
+        assert(
+            fmi3DoStep(
+                instance,
+                0.1,
+                0.25,
+                fmi3True,
+                &eventHandlingNeeded,
+                &terminateSimulation,
+                &earlyReturn,
+                &lastSuccessfulTime) == fmi3Discard);
+        assert(lastLogStatus == fmi3Discard);
+        assert(eventHandlingNeeded == fmi3False);
+        assert(terminateSimulation == fmi3False);
+        assert(earlyReturn == fmi3False);
+        assert(lastSuccessfulTime == 0.1);
+
+        assert(
+            fmi3DoStep(
+                instance,
+                0.1,
+                0.1,
+                fmi3True,
+                nullptr,
+                nullptr,
+                nullptr,
+                nullptr) == fmi3OK);
+        assert(fmi3GetFloat64(instance, &validVr, 1, &val, 1) == fmi3OK);
+        assert(val == value1);
     }
 
     // Test event/continuous state count queries

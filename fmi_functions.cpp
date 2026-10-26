@@ -215,14 +215,17 @@ void LogInstantiationFailure(
 //
 // Centralises the cast, null-check, try/catch and logging that every
 // uniform slave-delegating entry point would otherwise repeat.  A
-// cppfmu::FatalError becomes FMIFatal; any other std::exception, or a throw
-// carrying no std::exception, becomes FMIError instead of escaping across the
-// C linkage boundary.
+// cppfmu::FatalError becomes FMIFatal. A cppfmu::DiscardError becomes
+// FMIDiscard where the caller says the function may return it
+// (discardAllowed), and FMIError elsewhere. Any other std::exception, or a
+// throw carrying no std::exception, becomes FMIError instead of escaping
+// across the C linkage boundary.
 template<typename Operation>
 cppfmu::FMIStatus RunCall(
     Component& component,
     const char* functionName,
-    Operation operation)
+    Operation operation,
+    bool discardAllowed = false)
 {
     try {
         operation(*component.slave);
@@ -230,6 +233,11 @@ cppfmu::FMIStatus RunCall(
     } catch (const cppfmu::FatalError& e) {
         LogFailure(component, cppfmu::FMIFatal, functionName, e.what());
         return cppfmu::FMIFatal;
+    } catch (const cppfmu::DiscardError& e) {
+        const auto status =
+            discardAllowed ? cppfmu::FMIDiscard : cppfmu::FMIError;
+        LogFailure(component, status, functionName, e.what());
+        return status;
     } catch (const std::exception& e) {
         LogFailure(component, cppfmu::FMIError, functionName, e.what());
         return cppfmu::FMIError;
@@ -276,7 +284,8 @@ bool RefuseIllegalCall(
 
 // RunCall() for FMI 2.0: the call runs only if the instance's mode allows it,
 // and a successful call moves the instance to its next mode.  Mirrors
-// RunLegalCall() in fmi3_functions.cpp.
+// RunLegalCall() in fmi3_functions.cpp.  Of these calls, only the variable
+// setters may return fmi2Discard in Co-Simulation (2.1.3).
 template<typename Operation>
 cppfmu::FMIStatus RunCall(
     cppfmu::FMIComponent c,
@@ -291,7 +300,11 @@ cppfmu::FMIStatus RunCall(
     if (RefuseIllegalCall(*component, functionName, call)) {
         return cppfmu::FMIError;
     }
-    const auto status = RunCall(*component, functionName, operation);
+    const auto status = RunCall(
+        *component,
+        functionName,
+        operation,
+        call == Call::SetVariable);
     if (status == cppfmu::FMIOK) {
         component->mode = After(component->mode, call);
     }
@@ -553,8 +566,12 @@ fmiStatus fmiDoStep(
     const auto component = reinterpret_cast<Component*>(c);
     if (component == nullptr) return fmiError;
     bool completed = false;
-    const auto status =
-        RunCall(*component, "fmiDoStep", [&](cppfmu::SlaveInstance& slave) {
+    // A DiscardError means the slave did not step at all.
+    component->lastSuccessfulTime = currentCommunicationPoint;
+    const auto status = RunCall(
+        *component,
+        "fmiDoStep",
+        [&](cppfmu::SlaveInstance& slave) {
             double endTime = currentCommunicationPoint;
             completed = slave.DoStep(
                 currentCommunicationPoint,
@@ -564,7 +581,8 @@ fmiStatus fmiDoStep(
             component->lastSuccessfulTime = completed
                 ? currentCommunicationPoint + communicationStepSize
                 : endTime;
-        });
+        },
+        true);
     if (status != fmiOK) return status;
     return completed ? fmiOK : fmiDiscard;
 }
@@ -1072,8 +1090,12 @@ fmi2Status fmi2DoStep(
         return fmi2Error;
     }
     bool completed = false;
-    const auto status =
-        RunCall(*component, "fmi2DoStep", [&](cppfmu::SlaveInstance& slave) {
+    // A DiscardError means the slave did not step at all.
+    component->lastSuccessfulTime = currentCommunicationPoint;
+    const auto status = RunCall(
+        *component,
+        "fmi2DoStep",
+        [&](cppfmu::SlaveInstance& slave) {
             double endTime = currentCommunicationPoint;
             completed = slave.DoStep(
                 currentCommunicationPoint,
@@ -1083,8 +1105,9 @@ fmi2Status fmi2DoStep(
             component->lastSuccessfulTime = completed
                 ? currentCommunicationPoint + communicationStepSize
                 : endTime;
-        });
-    if (status != fmi2OK) return status;
+        },
+        true);
+    if (status != fmi2OK && status != fmi2Discard) return status;
     // A discarded step leaves the instance in stepComplete too (see Mode).
     component->mode = After(component->mode, Call::DoStep);
     return completed ? fmi2OK : fmi2Discard;

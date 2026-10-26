@@ -51,6 +51,11 @@ public:
                 derivativeSupported_ = (value[i] != 0.0);
             } else if (vr[i] == 2) {
                 seed_ = value[i];
+            } else if (vr[i] == 4) {
+                // A value the slave refuses but can go on without.
+                if (value[i] < 0.0) {
+                    throw cppfmu::DiscardError("vr 4 must not be negative");
+                }
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -70,6 +75,9 @@ public:
                 value[i] = derivativeSupported_ ? 1.0 : 0.0;
             } else if (vr[i] == 2) {
                 value[i] = seed_;
+            } else if (vr[i] == 4) {
+                // A value the slave cannot compute, but can go on without.
+                throw cppfmu::DiscardError("vr 4 cannot be computed");
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -225,13 +233,17 @@ public:
 
     bool DoStep(
         cppfmu::FMIReal /*currentCommunicationPoint*/,
-        cppfmu::FMIReal /*communicationStepSize*/,
+        cppfmu::FMIReal communicationStepSize,
         cppfmu::FMIBoolean /*noSetFMUStatePriorToCurrentPoint*/,
         cppfmu::FMIBoolean& eventHandlingNeeded,
         cppfmu::FMIBoolean& terminateSimulation,
         cppfmu::FMIBoolean& earlyReturn,
         cppfmu::FMIReal& lastSuccessfulTime) override
     {
+        // A step of 0.25 is discarded without stepping at all.
+        if (communicationStepSize == 0.25) {
+            throw cppfmu::DiscardError("a step of 0.25 is not possible");
+        }
         eventHandlingNeeded = cppfmu::FMIFalse;
         terminateSimulation = cppfmu::FMIFalse;
         earlyReturn = cppfmu::FMIFalse;
