@@ -152,6 +152,9 @@ elseif(CPPFMU_FMI_1)
         "fmi_functions.cpp"
     )
     target_compile_features(cs_test PRIVATE cxx_std_11)
+    # FMI 1.0 prefixes every function with the model identifier; the test calls
+    # them unprefixed, so fmi_functions.cpp must be compiled with an empty one.
+    target_compile_definitions(cs_test PRIVATE "MODEL_IDENTIFIER=")
     target_link_libraries(cs_test PRIVATE cppfmu)
     add_test(NAME "cs_test" COMMAND cs_test)
 elseif(CPPFMU_FMI_3)
