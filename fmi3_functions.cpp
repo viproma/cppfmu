@@ -28,6 +28,7 @@
  * variable access the FMU opened the update for is legal.
  */
 
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <limits>
@@ -79,13 +80,16 @@ struct Component
         if (time < lastFinishedUpdate) {
             throw std::logic_error(
                 "IntermediateUpdate: the time " + std::to_string(time) +
-                " precedes an earlier update with intermediateStepFinished, at " +
+                " precedes an earlier update with intermediateStepFinished, "
+                "at " +
                 std::to_string(lastFinishedUpdate));
         }
 
         fmi3Boolean earlyReturnRequested = fmi3False;
         fmi3Float64 earlyReturnTime = time;
-        lifecycle.EnterIntermediateUpdate(variableSetRequested, variableGetAllowed);
+        lifecycle.EnterIntermediateUpdate(
+            variableSetRequested,
+            variableGetAllowed);
         intermediateUpdate(
             instanceEnvironment,
             time,
@@ -116,23 +120,28 @@ struct Component
         return result;
     }
 
-    bool IsCategoryLogged(const std::string& category) const
+    // A NULL category (an FMU that declares none) is logged only while
+    // fmi3SetDebugLogging has not picked out categories.
+    bool IsCategoryLogged(cppfmu::FMIString category) const
     {
         if (loggedCategories.empty()) return true;
+        if (category == nullptr) return false;
         for (const auto& c : loggedCategories) {
             if (c == category) return true;
         }
         return false;
     }
 
+    /* Forwards a message to the importer if logging is on for its category,
+     * whatever its status. FMI 3.0 forbids calling logMessage otherwise, errors
+     * included (2.3.1, fmi3SetDebugLogging).
+     */
     void Log(
         fmi3Status status,
         cppfmu::FMIString category,
         cppfmu::FMIString message) const
     {
-        if ((status == fmi3Fatal || status == fmi3Error ||
-             debugLoggingEnabled) &&
-            IsCategoryLogged(category)) {
+        if (debugLoggingEnabled && IsCategoryLogged(category)) {
             if (logMessage) {
                 logMessage(instanceEnvironment, status, category, message);
             }
@@ -162,7 +171,10 @@ struct Component
 class DoStepScope
 {
 public:
-    DoStepScope(Component& component, cppfmu::FMIReal start, cppfmu::FMIReal end)
+    DoStepScope(
+        Component& component,
+        cppfmu::FMIReal start,
+        cppfmu::FMIReal end)
         : m_component(component)
     {
         m_component.inDoStep = true;
@@ -170,7 +182,10 @@ public:
         m_component.stepEnd = end;
         m_component.lastFinishedUpdate = start;
     }
-    ~DoStepScope() { m_component.inDoStep = false; }
+    ~DoStepScope()
+    {
+        m_component.inDoStep = false;
+    }
     DoStepScope(const DoStepScope&) = delete;
     DoStepScope& operator=(const DoStepScope&) = delete;
 
@@ -183,6 +198,78 @@ Component* AsComponent(fmi3Instance instance)
     return reinterpret_cast<Component*>(instance);
 }
 
+/* The fmi3FMUState this layer hands the importer: the slave's own state, and
+ * the mode the instance was in when it was taken.
+ *
+ * FMI 3.0 requires a state to hold everything needed to continue from it
+ * (2.2.6), mode included, but the slave's state is opaque to this layer and the
+ * mode is this layer's to track. So the slave's state travels inside this
+ * wrapper, and restoring it restores the mode too.
+ */
+struct FmuState
+{
+    Lifecycle::State mode;
+    cppfmu::FMIFMUState slave;
+};
+
+FmuState* AsFmuState(fmi3FMUState state)
+{
+    return static_cast<FmuState*>(state);
+}
+
+/* The serialized form of an FmuState: a header, then the slave's bytes.
+ *
+ *     bytes 0-3  kSerializedMagic, so foreign bytes are refused, not misread
+ *     byte  4    kSerializedVersion, the layout of what follows
+ *     byte  5    the mode, as ModeCode() encodes it
+ *     bytes 6-   the slave's serialized state
+ *
+ * The mode has its own encoding so that the format does not change if
+ * Lifecycle::State is ever reordered.
+ */
+const char kSerializedMagic[4] = {'C', 'F', 'S', '3'};
+const unsigned char kSerializedVersion = 1;
+const std::size_t kSerializedHeaderSize = 6;
+
+unsigned char ModeCode(Lifecycle::State mode)
+{
+    switch (mode) {
+    case Lifecycle::State::Instantiated:
+        return 1;
+    case Lifecycle::State::Initialization:
+        return 2;
+    case Lifecycle::State::Step:
+        return 3;
+    case Lifecycle::State::Event:
+        return 4;
+    case Lifecycle::State::Terminated:
+        return 5;
+    default:
+        break;
+    }
+    // Lifecycle forbids taking a state in any other mode.
+    throw std::logic_error("An FMU state cannot be taken in this mode");
+}
+
+Lifecycle::State ModeFromCode(unsigned char code)
+{
+    switch (code) {
+    case 1:
+        return Lifecycle::State::Instantiated;
+    case 2:
+        return Lifecycle::State::Initialization;
+    case 3:
+        return Lifecycle::State::Step;
+    case 4:
+        return Lifecycle::State::Event;
+    case 5:
+        return Lifecycle::State::Terminated;
+    default:
+        break;
+    }
+    throw std::logic_error("The serialized FMU state names an unknown mode");
+}
+
 /* Sends one fmi3Error message to the host, swallowing a failed report.
  *
  * Reporting runs on the way out of a call that has already failed, and
@@ -193,7 +280,24 @@ Component* AsComponent(fmi3Instance instance)
 void ReportError(const Component& component, const char* message)
 {
     try {
-        component.Log(fmi3Error, "cppfmu", message);
+        component.Log(fmi3Error, CPPFMU_LOG_CATEGORY, message);
+    } catch (...) {
+        // There is nothing left to report a failed report with.
+    }
+}
+
+/* Tells the host which call was discarded (it failed but changed nothing) and
+ * why. */
+void ReportDiscard(
+    const Component& component,
+    const char* functionName,
+    const char* reason)
+{
+    try {
+        component.Log(
+            fmi3Discard,
+            CPPFMU_LOG_CATEGORY,
+            (std::string(functionName) + ": " + reason).c_str());
     } catch (...) {
         // There is nothing left to report a failed report with.
     }
@@ -239,9 +343,10 @@ fmi3Status ReportInvalidArgument(
  * call the slave threw a std::logic_error out of -- an unknown value reference,
  * a restore with nothing live to restore into -- is a violated precondition,
  * not a misbehaving simulation, and is refused the way an argument is:
- * fmi3Error, instance left as it was. Any other std::exception, or a
- * non-exception, leaves the instance failed. A cppfmu::FatalError takes the
- * whole environment down with fmi3Fatal.
+ * fmi3Error, instance left as it was. A cppfmu::DiscardError is a call that
+ * failed but changed nothing: fmi3Discard, instance left as it was. Any other
+ * std::exception, or a non-exception, leaves the instance failed. A
+ * cppfmu::FatalError takes the whole environment down with fmi3Fatal.
  */
 template<typename Operation>
 fmi3Status RunLegalCall(
@@ -269,6 +374,9 @@ fmi3Status RunLegalCall(
         ReportError(*component, e.what());
         component->lifecycle.Fail();
         return fmi3Fatal;
+    } catch (const cppfmu::DiscardError& e) {
+        ReportDiscard(*component, functionName, e.what());
+        return fmi3Discard;
     } catch (const std::logic_error& e) {
         // A precondition the call itself violated (std::out_of_range is a
         // std::logic_error, so this catches that too). Refused, instance left as
@@ -290,15 +398,16 @@ fmi3Status RunLegalCall(
 
 /* Refuses to instantiate an interface this layer does not serve. */
 fmi3Instance RefuseInstantiation(
+    fmi3Boolean loggingOn,
     cppfmu::FMIComponentEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage,
     const char* functionName)
 {
-    if (logMessage) {
+    if (loggingOn == fmi3True && logMessage) {
         logMessage(
             instanceEnvironment,
             fmi3Error,
-            "cppfmu",
+            CPPFMU_LOG_CATEGORY,
             (std::string(functionName) +
              " is not provided by this FMU, which declares Co-Simulation only")
                 .c_str());
@@ -343,11 +452,12 @@ fmi3Instance fmi3InstantiateModelExchange(
     fmi3String /*instantiationToken*/,
     fmi3String /*resourcePath*/,
     fmi3Boolean /*visible*/,
-    fmi3Boolean /*loggingOn*/,
+    fmi3Boolean loggingOn,
     fmi3InstanceEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage)
 {
     return RefuseInstantiation(
+        loggingOn,
         instanceEnvironment,
         logMessage,
         "fmi3InstantiateModelExchange");
@@ -369,8 +479,11 @@ fmi3Instance fmi3InstantiateCoSimulation(
 {
     std::unique_ptr<Component> component;
     try {
-        component.reset(
-            new Component(instanceEnvironment, logMessage, loggingOn, eventModeUsed));
+        component.reset(new Component(
+            instanceEnvironment,
+            logMessage,
+            loggingOn,
+            eventModeUsed));
 
         auto* comp = component.get();
         auto loggerFn = [comp](
@@ -412,13 +525,21 @@ fmi3Instance fmi3InstantiateCoSimulation(
         }
         return component.release();
     } catch (const cppfmu::FatalError& e) {
-        if (logMessage) {
-            logMessage(instanceEnvironment, fmi3Fatal, "cppfmu", e.what());
+        if (loggingOn == fmi3True && logMessage) {
+            logMessage(
+                instanceEnvironment,
+                fmi3Fatal,
+                CPPFMU_LOG_CATEGORY,
+                e.what());
         }
         return nullptr;
     } catch (const std::exception& e) {
-        if (logMessage) {
-            logMessage(instanceEnvironment, fmi3Error, "cppfmu", e.what());
+        if (loggingOn == fmi3True && logMessage) {
+            logMessage(
+                instanceEnvironment,
+                fmi3Error,
+                CPPFMU_LOG_CATEGORY,
+                e.what());
         }
         return nullptr;
     }
@@ -429,7 +550,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3String /*instantiationToken*/,
     fmi3String /*resourcePath*/,
     fmi3Boolean /*visible*/,
-    fmi3Boolean /*loggingOn*/,
+    fmi3Boolean loggingOn,
     fmi3InstanceEnvironment instanceEnvironment,
     fmi3LogMessageCallback logMessage,
     fmi3ClockUpdateCallback /*clockUpdate*/,
@@ -437,6 +558,7 @@ fmi3Instance fmi3InstantiateScheduledExecution(
     fmi3UnlockPreemptionCallback /*unlockPreemption*/)
 {
     return RefuseInstantiation(
+        loggingOn,
         instanceEnvironment,
         logMessage,
         "fmi3InstantiateScheduledExecution");
@@ -980,7 +1102,20 @@ fmi3Status fmi3GetFMUState(fmi3Instance instance, fmi3FMUState* FMUState)
         instance,
         "fmi3GetFMUState",
         LifecycleCall::FmuStateRead,
-        [&](cppfmu::SlaveInstance3& slave) { slave.GetFMUState(FMUState); });
+        [&](cppfmu::SlaveInstance3& slave) {
+            const auto mode = AsComponent(instance)->lifecycle.CurrentState();
+            if (*FMUState != nullptr) {
+                // Overwrite the state the importer passed back, as FMI 3.0
+                // allows.
+                FmuState* const existing = AsFmuState(*FMUState);
+                slave.GetFMUState(&existing->slave);
+                existing->mode = mode;
+            } else {
+                std::unique_ptr<FmuState> state(new FmuState{mode, nullptr});
+                slave.GetFMUState(&state->slave);
+                *FMUState = state.release();
+            }
+        });
 }
 
 fmi3Status fmi3SetFMUState(fmi3Instance instance, fmi3FMUState FMUState)
@@ -991,17 +1126,19 @@ fmi3Status fmi3SetFMUState(fmi3Instance instance, fmi3FMUState FMUState)
             "fmi3SetFMUState",
             "was called without a state");
     }
+    FmuState* const state = AsFmuState(FMUState);
     const fmi3Status status = RunLegalCall(
         instance,
         "fmi3SetFMUState",
         LifecycleCall::FmuStateRestore,
-        [&](cppfmu::SlaveInstance3& slave) { slave.SetFMUState(FMUState); });
-    // FMI 3.0's recovery idiom is to restore a state captured in Step Mode and
-    // keep stepping, so a SetFMUState that succeeds while Failed is the one way
-    // back there other than Reset. RestoreFromSnapshot() performs that move and
-    // leaves any other state alone.
+        [&](cppfmu::SlaveInstance3& slave) {
+            slave.SetFMUState(state->slave);
+        });
+    // The instance continues from the mode the state was taken in, as it would
+    // have if it had never left it -- also from Failed, which is FMI 3.0's
+    // recovery idiom.
     if (status == fmi3OK) {
-        AsComponent(instance)->lifecycle.RestoreFromSnapshot();
+        AsComponent(instance)->lifecycle.RestoreFromSnapshot(state->mode);
     }
     return status;
 }
@@ -1021,7 +1158,11 @@ fmi3Status fmi3FreeFMUState(fmi3Instance instance, fmi3FMUState* FMUState)
         instance,
         "fmi3FreeFMUState",
         LifecycleCall::SnapshotMemory,
-        [&](cppfmu::SlaveInstance3& slave) { slave.FreeFMUState(*FMUState); });
+        [&](cppfmu::SlaveInstance3& slave) {
+            FmuState* const state = AsFmuState(*FMUState);
+            slave.FreeFMUState(state->slave);
+            delete state;
+        });
     // Only a call that did free the state has earned the null that stops the host
     // freeing it twice.
     if (status == fmi3OK) {
@@ -1046,7 +1187,8 @@ fmi3Status fmi3SerializedFMUStateSize(
         "fmi3SerializedFMUStateSize",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            *size = slave.SerializedFMUStateSize(FMUState);
+            *size = kSerializedHeaderSize +
+                slave.SerializedFMUStateSize(AsFmuState(FMUState)->slave);
         });
 }
 
@@ -1067,7 +1209,21 @@ fmi3Status fmi3SerializeFMUState(
         "fmi3SerializeFMUState",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            slave.SerializeFMUState(FMUState, serializedState, size);
+            if (size < kSerializedHeaderSize) {
+                throw std::logic_error(
+                    "The buffer is too small for the serialized FMU state");
+            }
+            const FmuState* const state = AsFmuState(FMUState);
+            std::memcpy(
+                serializedState,
+                kSerializedMagic,
+                sizeof kSerializedMagic);
+            serializedState[4] = kSerializedVersion;
+            serializedState[5] = ModeCode(state->mode);
+            slave.SerializeFMUState(
+                state->slave,
+                serializedState + kSerializedHeaderSize,
+                size - kSerializedHeaderSize);
         });
 }
 
@@ -1088,7 +1244,25 @@ fmi3Status fmi3DeserializeFMUState(
         "fmi3DeserializeFMUState",
         LifecycleCall::SnapshotMemory,
         [&](cppfmu::SlaveInstance3& slave) {
-            *FMUState = slave.DeserializeFMUState(serializedState, size);
+            if (size < kSerializedHeaderSize ||
+                std::memcmp(
+                    serializedState,
+                    kSerializedMagic,
+                    sizeof kSerializedMagic) != 0) {
+                throw std::logic_error(
+                    "The bytes are not an FMU state serialized by this FMU");
+            }
+            if (serializedState[4] != kSerializedVersion) {
+                throw std::logic_error(
+                    "The FMU state was serialized by an incompatible version "
+                    "of this FMU");
+            }
+            std::unique_ptr<FmuState> state(
+                new FmuState{ModeFromCode(serializedState[5]), nullptr});
+            state->slave = slave.DeserializeFMUState(
+                serializedState + kSerializedHeaderSize,
+                size - kSerializedHeaderSize);
+            *FMUState = state.release();
         });
 }
 
@@ -1097,9 +1271,10 @@ fmi3Status fmi3DeserializeFMUState(
 // =============================================================================
 
 // The quantity FMI asks for here is the partial derivative of the model
-// equations with the states held -- not the response of a step. Confined to
-// Step Mode: a co-simulation slave is free not to have a model to differentiate
-// before ExitInitializationMode or after Terminate.
+// equations with the states held -- not the response of a step. FMI 3.0 allows
+// both calls in Initialization, Step, Event and Terminated Mode (2.3.3, 2.3.5,
+// 2.3.8, 4.2.1). A slave that has no model to differentiate in one of them
+// refuses by throwing std::logic_error, which leaves the instance as it was.
 
 fmi3Status fmi3GetDirectionalDerivative(
     fmi3Instance instance,
@@ -1115,7 +1290,7 @@ fmi3Status fmi3GetDirectionalDerivative(
     return RunLegalCall(
         instance,
         "fmi3GetDirectionalDerivative",
-        LifecycleCall::StepModeQuery,
+        LifecycleCall::DerivativeQuery,
         [&](const cppfmu::SlaveInstance3& slave) {
             slave.GetDirectionalDerivative(
                 unknowns,
@@ -1143,7 +1318,7 @@ fmi3Status fmi3GetAdjointDerivative(
     return RunLegalCall(
         instance,
         "fmi3GetAdjointDerivative",
-        LifecycleCall::StepModeQuery,
+        LifecycleCall::DerivativeQuery,
         [&](const cppfmu::SlaveInstance3& slave) {
             slave.GetAdjointDerivative(
                 unknowns,
@@ -1632,6 +1807,16 @@ fmi3Status fmi3DoStep(
         component->lifecycle.Fail();
         if (lastSuccessfulTime) *lastSuccessfulTime = currentCommunicationPoint;
         return fmi3Fatal;
+    } catch (const cppfmu::DiscardError& e) {
+        // The slave did not step at all; the instance stays in Step Mode.
+        ReportDiscard(*component, "fmi3DoStep", e.what());
+        if (eventHandlingNeeded) *eventHandlingNeeded = fmi3False;
+        if (terminateSimulation) *terminateSimulation = fmi3False;
+        if (earlyReturn) *earlyReturn = fmi3False;
+        if (lastSuccessfulTime) *lastSuccessfulTime = currentCommunicationPoint;
+        component->lastSuccessfulTime =
+            static_cast<cppfmu::FMIReal>(currentCommunicationPoint);
+        return fmi3Discard;
     } catch (const std::exception& e) {
         ReportError(*component, e.what());
         component->lifecycle.Fail();

@@ -22,6 +22,14 @@ public:
                 value_ = value[i];
             } else if (vr[i] == 2) {
                 seed_ = value[i];
+            } else if (vr[i] == 3) {
+                // A message that is undefined behaviour if used as a format.
+                throw std::runtime_error("%s%s%n");
+            } else if (vr[i] == 4) {
+                // A value the slave refuses but can go on without.
+                if (value[i] < 0.0) {
+                    throw cppfmu::DiscardError("vr 4 must not be negative");
+                }
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -38,6 +46,9 @@ public:
                 value[i] = value_;
             } else if (vr[i] == 2) {
                 value[i] = seed_;
+            } else if (vr[i] == 4) {
+                // A value the slave cannot compute, but can go on without.
+                throw cppfmu::DiscardError("vr 4 cannot be computed");
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -174,11 +185,44 @@ public:
         cppfmu::FMIBoolean newStep,
         cppfmu::FMIReal& endOfStep) override
     {
+        // A step of 0.25 is discarded without stepping at all.
+        if (communicationStepSize == 0.25) {
+            throw cppfmu::DiscardError("a step of 0.25 is not possible");
+        }
+        // A step longer than 4.0 makes TerminateRequested() throw.
+        if (communicationStepSize > 4.0) {
+            terminateThrows_ = true;
+        }
+        // A step longer than 2.5 also asks to end the simulation.
+        if (communicationStepSize > 2.5) {
+            terminateRequested_ = true;
+        }
+        // A step longer than 1.0 is discarded after 1.0.
+        if (communicationStepSize > 1.0) {
+            endOfStep = currentCommunicationPoint + 1.0;
+            return false;
+        }
         return true;
+    }
+
+    bool TerminateRequested() const override
+    {
+        if (terminateThrows_) {
+            throw std::runtime_error("cannot tell whether to terminate");
+        }
+        return terminateRequested_;
+    }
+
+    void Reset() override
+    {
+        terminateRequested_ = false;
+        terminateThrows_ = false;
     }
 
 private:
     cppfmu::Memory memory_;
+    bool terminateRequested_ = false;
+    bool terminateThrows_ = false;
     cppfmu::FMIReal value_ = 0.0;
     bool derivativeSupported_ = false;
     cppfmu::FMIReal seed_ = 1.0;

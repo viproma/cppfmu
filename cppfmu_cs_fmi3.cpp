@@ -490,7 +490,7 @@ void SlaveInstance3::GetAdjointDerivative(
 
 void SlaveInstance3::GetVariableDependencies(
     FMIValueReference /*dependent*/,
-    const std::size_t /*elementIndicesOfDependent*/[],
+    std::size_t /*elementIndicesOfDependent*/[],
     FMIValueReference /*independents*/[],
     std::size_t /*elementIndicesOfIndependents*/[],
     FMIDependencyKind /*dependencyKinds*/[],

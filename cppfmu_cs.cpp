@@ -51,6 +51,12 @@ void SlaveInstance::Reset()
 }
 
 
+bool SlaveInstance::TerminateRequested() const
+{
+    return false;
+}
+
+
 void SlaveInstance::SetReal(
     const FMIValueReference /*vr*/[],
     std::size_t nvr,

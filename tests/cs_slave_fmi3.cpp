@@ -51,6 +51,11 @@ public:
                 derivativeSupported_ = (value[i] != 0.0);
             } else if (vr[i] == 2) {
                 seed_ = value[i];
+            } else if (vr[i] == 4) {
+                // A value the slave refuses but can go on without.
+                if (value[i] < 0.0) {
+                    throw cppfmu::DiscardError("vr 4 must not be negative");
+                }
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -70,6 +75,9 @@ public:
                 value[i] = derivativeSupported_ ? 1.0 : 0.0;
             } else if (vr[i] == 2) {
                 value[i] = seed_;
+            } else if (vr[i] == 4) {
+                // A value the slave cannot compute, but can go on without.
+                throw cppfmu::DiscardError("vr 4 cannot be computed");
             } else {
                 throw std::logic_error("Invalid value reference");
             }
@@ -225,13 +233,17 @@ public:
 
     bool DoStep(
         cppfmu::FMIReal /*currentCommunicationPoint*/,
-        cppfmu::FMIReal /*communicationStepSize*/,
+        cppfmu::FMIReal communicationStepSize,
         cppfmu::FMIBoolean /*noSetFMUStatePriorToCurrentPoint*/,
         cppfmu::FMIBoolean& eventHandlingNeeded,
         cppfmu::FMIBoolean& terminateSimulation,
         cppfmu::FMIBoolean& earlyReturn,
         cppfmu::FMIReal& lastSuccessfulTime) override
     {
+        // A step of 0.25 is discarded without stepping at all.
+        if (communicationStepSize == 0.25) {
+            throw cppfmu::DiscardError("a step of 0.25 is not possible");
+        }
         eventHandlingNeeded = cppfmu::FMIFalse;
         terminateSimulation = cppfmu::FMIFalse;
         earlyReturn = cppfmu::FMIFalse;
@@ -252,6 +264,49 @@ public:
                 throw std::logic_error("Invalid value reference");
             }
         }
+    }
+
+    // VR 10 stands for a two-element array output: element 1 depends on all of
+    // VR 0, element 2 on element 1 of VR 3. Other variables have no
+    // dependency information.
+    std::size_t GetNumberOfVariableDependencies(
+        cppfmu::FMIValueReference valueReference) const override
+    {
+        if (valueReference != 10) {
+            return SlaveInstance3::GetNumberOfVariableDependencies(
+                valueReference);
+        }
+        return 2;
+    }
+
+    void GetVariableDependencies(
+        cppfmu::FMIValueReference dependent,
+        std::size_t elementIndicesOfDependent[],
+        cppfmu::FMIValueReference independents[],
+        std::size_t elementIndicesOfIndependents[],
+        cppfmu::FMIDependencyKind dependencyKinds[],
+        std::size_t nDependencies) const override
+    {
+        if (dependent != 10) {
+            SlaveInstance3::GetVariableDependencies(
+                dependent,
+                elementIndicesOfDependent,
+                independents,
+                elementIndicesOfIndependents,
+                dependencyKinds,
+                nDependencies);
+        }
+        if (nDependencies < 2) {
+            throw std::logic_error("Too few dependencies requested");
+        }
+        elementIndicesOfDependent[0] = 1;
+        independents[0] = 0;
+        elementIndicesOfIndependents[0] = 0;
+        dependencyKinds[0] = fmi3Dependent;
+        elementIndicesOfDependent[1] = 2;
+        independents[1] = 3;
+        elementIndicesOfIndependents[1] = 1;
+        dependencyKinds[1] = fmi3Discrete;
     }
 
     void GetBinary(

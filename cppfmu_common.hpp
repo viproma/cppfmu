@@ -8,6 +8,7 @@
 
 #include <algorithm>  // std::find()
 #include <cstddef>    // std::size_t
+#include <cstdlib>    // std::calloc(), std::free()
 #include <functional> // std::function
 #include <memory>     // std::shared_ptr, std::unique_ptr
 #include <new>        // std::bad_alloc
@@ -33,6 +34,20 @@ extern "C"
 #   define CPPFMU_NOEXCEPT noexcept
 #else
 #   define CPPFMU_NOEXCEPT
+#endif
+
+
+/* The log category of the messages the FMI wrapper (fmi_functions.cpp or
+ * fmi3_functions.cpp) logs itself: errors from the slave's exceptions, refused
+ * calls and unsupported functions. Define it to another string literal, for
+ * example with a compile definition, to use another category. Declare it under
+ * <LogCategories> in the FMU's modelDescription.xml, so that the importer can
+ * turn it on with fmi2SetDebugLogging or fmi3SetDebugLogging. An FMU that
+ * declares no categories must log with a NULL category (FMI 2.0 2.1.5, FMI 3.0
+ * 2.3.1), so define it as NULL for such an FMU.
+ */
+#ifndef CPPFMU_LOG_CATEGORY
+#   define CPPFMU_LOG_CATEGORY "cppfmu"
 #endif
 
 
@@ -143,6 +158,24 @@ public:
 };
 
 
+/* Exception class that signals "discard": the call failed but changed
+ * nothing, so the importer may go on, for example with other arguments or a
+ * smaller step. Throw it only after undoing whatever the call had done.
+ *
+ * FMI 3.0 allows fmi3Discard from every function. FMI 2.0 allows fmi2Discard
+ * only from some (2.1.3), in Co-Simulation from the variable setters and
+ * fmi2DoStep, and FMI 1.0 fmiDiscard only from fmiDoStep. From any other
+ * function this exception becomes an error, which FMI 2.0 lets an importer
+ * recover from with fmi2SetFMUstate or fmi2Reset.
+ */
+class DiscardError : public std::runtime_error
+{
+public:
+    DiscardError(const char* msg) CPPFMU_NOEXCEPT : std::runtime_error{msg} { }
+    DiscardError(const std::string& msg) : std::runtime_error{msg} { }
+};
+
+
 /* An alias for a std::unique_ptr specialisation where the deleter is general
  * and independent of the type of the object pointed to.
  */
@@ -191,10 +224,13 @@ public:
 
     void Log(FMIStatus status, FMIString category, FMIString message) const
     {
+        // A NULL category (an FMU that declares none) is logged only while
+        // fmi3SetDebugLogging has not picked out categories.
         if (m_settings->loggedCategories.empty() ||
-            detail::CanFind(
-                m_settings->loggedCategories,
-                std::string(category))) {
+            (category != nullptr &&
+             detail::CanFind(
+                 m_settings->loggedCategories,
+                 std::string(category)))) {
             if (m_fmiLogger) {
                 m_fmiLogger(m_component, status, category, message);
             }
@@ -222,9 +258,28 @@ private:
 // ============================================================================
 
 
+namespace detail
+{
+// Stand-ins for the memory callbacks when the importer passes NULL ones.
+inline void* DefaultAllocateMemory(std::size_t nObj, std::size_t size)
+{
+    return std::calloc(nObj, size);
+}
+
+inline void DefaultFreeMemory(void* ptr)
+{
+    std::free(ptr);
+}
+} // namespace detail
+
+
 /* A wrapper class for the FMI memory allocation and deallocation functions.
  * Alloc() and Free() simply forward to the functions provided by the
  * simulation environment.
+ *
+ * An FMI 2.0 FMU that declares canNotUseMemoryManagementFunctions="true" may be
+ * given NULL callbacks (2.1.5), and some importers (fmusim) always pass NULL.
+ * A NULL callback is replaced by std::calloc() or std::free().
  */
 class Memory
 {
@@ -232,7 +287,10 @@ public:
     explicit Memory(const FMICallbackFunctions& callbackFunctions)
         : m_alloc{callbackFunctions.allocateMemory}
         , m_free{callbackFunctions.freeMemory}
-    { }
+    {
+        if (m_alloc == nullptr) m_alloc = &detail::DefaultAllocateMemory;
+        if (m_free == nullptr) m_free = &detail::DefaultFreeMemory;
+    }
 
     // Allocates memory for 'nObj' objects of size 'size'.
     void* Alloc(std::size_t nObj, std::size_t size) CPPFMU_NOEXCEPT
@@ -461,7 +519,16 @@ public:
         , m_settings{settings}
     { }
 
-    // Logs a message.
+    /* Logs a message, if logging is on for its category.
+     *
+     * FMI 2.0: logging is on when loggingOn was true at instantiation, or
+     * fmi2SetDebugLogging last turned it on, for every status, errors and
+     * fatal errors included (2.1.5). This is the same as FMI 3.0. Log() and
+     * DebugLog() are therefore the same.
+     *
+     * FMI 1.0: loggingOn only controls debug logging, so Log() passes every
+     * message on and DebugLog() only the ones logged while it is on.
+     */
     template<typename... Args>
     void Log(
         FMIStatus status,
@@ -469,8 +536,14 @@ public:
         FMIString message,
         Args&&... args) CPPFMU_NOEXCEPT
     {
+#   ifndef CPPFMU_USE_FMI_1_0
+        if (!m_settings->debugLoggingEnabled) return;
+#   endif
+        // A NULL category (an FMU that declares none) is logged only while
+        // fmi2SetDebugLogging has not picked out categories.
         if (m_settings->loggedCategories.empty() ||
-            detail::CanFind(m_settings->loggedCategories, category)) {
+            (category != nullptr &&
+             detail::CanFind(m_settings->loggedCategories, category))) {
             m_fmiLogger(
                 m_component,
                 m_instanceName.c_str(),

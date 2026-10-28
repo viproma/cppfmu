@@ -177,9 +177,12 @@ int main()
          State::Terminated,
          State::Failed});
 
-    // Derivatives and stepping are Step-Mode only; discrete-state calls are
-    // confined to the modes that evaluate them.
-    AssertLegalIn(LifecycleCall::StepModeQuery, {State::Step});
+    // Derivatives may be asked for in every mode with a model (FMI 3.0, 2.3.3,
+    // 2.3.5, 2.3.8, 4.2.1); stepping is Step-Mode only; discrete-state calls
+    // are confined to the modes that evaluate them.
+    AssertLegalIn(
+        LifecycleCall::DerivativeQuery,
+        {State::Initialization, State::Step, State::Event, State::Terminated});
     AssertLegalIn(
         LifecycleCall::OutputDerivatives,
         {State::Step, State::IntermediateUpdate});
@@ -251,18 +254,44 @@ int main()
         assert(!lc.Allows(LifecycleCall::FmuStateRead));
     }
 
-    // RestoreFromSnapshot() is the one way from Failed back to Step; from any
-    // other state it leaves the instance where it was.
-    {
-        auto lc = At(State::Failed);
-        lc.RestoreFromSnapshot();
-        assert(lc.CurrentState() == State::Step);
-    }
+    // ========================================================================
+    // Restoring an FMU state puts the instance in the mode the state was taken
+    // in, whatever mode it was in itself -- Failed included, which is how a
+    // Step-mode state recovers a failed instance.
+    // ========================================================================
+    const State kSnapshotModes[] = {
+        State::Instantiated,
+        State::Initialization,
+        State::Step,
+        State::Event,
+        State::Terminated,
+    };
     for (const auto s : kAllStates) {
-        if (s == State::Failed) continue;
-        auto lc = At(s);
-        lc.RestoreFromSnapshot();
-        assert(lc.CurrentState() == s);
+        const bool expected =
+            s != State::Failed && s != State::IntermediateUpdate;
+        assert(Lifecycle::IsSnapshotMode(s) == expected);
+        assert(At(s).Allows(LifecycleCall::FmuStateRead) == expected);
+    }
+    for (const auto from : kAllStates) {
+        if (!At(from).Allows(LifecycleCall::FmuStateRestore)) continue;
+        for (const auto saved : kSnapshotModes) {
+            auto lc = At(from);
+            lc.RestoreFromSnapshot(saved);
+            assert(lc.CurrentState() == saved);
+        }
+        // A mode no state can be taken in is ignored.
+        for (const auto saved : {State::Failed, State::IntermediateUpdate}) {
+            auto lc = At(from);
+            lc.RestoreFromSnapshot(saved);
+            assert(lc.CurrentState() == from);
+        }
+    }
+    {
+        // A Step-mode state restored into a fresh instance can be stepped
+        // without going through initialization.
+        Lifecycle lc;
+        lc.RestoreFromSnapshot(State::Step);
+        assert(lc.Allows(LifecycleCall::DoStep));
     }
 
     // ========================================================================
@@ -283,7 +312,7 @@ int main()
         assert(lc.Allows(LifecycleCall::OutputDerivatives));
         assert(!lc.Allows(LifecycleCall::WriteVariable));
         assert(!lc.Allows(LifecycleCall::DoStep));
-        assert(!lc.Allows(LifecycleCall::StepModeQuery));
+        assert(!lc.Allows(LifecycleCall::DerivativeQuery));
         assert(!lc.Allows(LifecycleCall::FmuStateRead));
         assert(!lc.Allows(LifecycleCall::EnterEventMode));
         assert(!lc.Allows(LifecycleCall::Terminate));
