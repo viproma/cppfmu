@@ -173,6 +173,16 @@ public:
         const FMIByte data[],
         std::size_t size);
 
+    /* Called from fmi2GetBooleanStatus(fmi2Terminated). Returns true when the
+     * slave wants the simulation to end. Importers ask only after fmi2DoStep()
+     * returned fmi2Discard, so a slave that wants to end returns false from
+     * DoStep() (or throws DiscardError) and true from here. The answer is part
+     * of the slave's state: Reset() and the FMU state functions should
+     * restore it. Never called with FMI 1.x.
+     * Returns false by default.
+     */
+    virtual bool TerminateRequested() const;
+
     // Called from fmi2DoStep()/fmiDoStep(). Must be implemented in model code.
     virtual bool DoStep(
         FMIReal currentCommunicationPoint,

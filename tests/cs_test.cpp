@@ -688,6 +688,52 @@ int main()
         assert(fmi2FreeFMUstate(instance2, &state2) == fmi2OK);
         fmi2FreeInstance(instance2);
     }
+
+    // A slave that asks to end the simulation: fmi2Terminated is true after
+    // the step that asked (the default answer, false, is tested above), and
+    // false again after fmi2Reset.
+    {
+        const auto inst = fmi2Instantiate(
+            TEST_INSTANCE_NAME,
+            fmi2CoSimulation,
+            "04b947f3-c057-4860-b59b-eb0bd6fa52be",
+            nullptr,
+            &callbacks,
+            fmi2False,
+            fmi2False);
+        assert(inst);
+        assert(fmi2SetupExperiment(inst, fmi2False, 0.0, 0.0, fmi2False, 0.0) == fmi2OK);
+        assert(fmi2EnterInitializationMode(inst) == fmi2OK);
+        assert(fmi2ExitInitializationMode(inst) == fmi2OK);
+        fmi2Boolean terminated = fmi2True;
+        assert(
+            fmi2GetBooleanStatus(inst, fmi2Terminated, &terminated) == fmi2OK);
+        assert(terminated == fmi2False);
+        assert(fmi2DoStep(inst, 0.0, 3.0, fmi2False) == fmi2Discard);
+        assert(
+            fmi2GetBooleanStatus(inst, fmi2Terminated, &terminated) == fmi2OK);
+        assert(terminated == fmi2True);
+
+        // A TerminateRequested() that throws becomes fmi2Error, and the
+        // answer is left as it was.
+        assert(fmi2DoStep(inst, 1.0, 5.0, fmi2False) == fmi2Discard);
+        terminated = fmi2False;
+        assert(
+            fmi2GetBooleanStatus(inst, fmi2Terminated, &terminated)
+            == fmi2Error);
+        assert(terminated == fmi2False);
+        std::fprintf(stderr, "(The last error was expected.)\n");
+
+        assert(fmi2Reset(inst) == fmi2OK);
+        assert(fmi2SetupExperiment(inst, fmi2False, 0.0, 0.0, fmi2False, 0.0) == fmi2OK);
+        assert(fmi2EnterInitializationMode(inst) == fmi2OK);
+        assert(fmi2ExitInitializationMode(inst) == fmi2OK);
+        terminated = fmi2True;
+        assert(
+            fmi2GetBooleanStatus(inst, fmi2Terminated, &terminated) == fmi2OK);
+        assert(terminated == fmi2False);
+        fmi2FreeInstance(inst);
+    }
 #endif
     return 0;
 }

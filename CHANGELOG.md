@@ -15,6 +15,13 @@ Unreleased
 ----------
 
 ### Added
+- `SlaveInstance::TerminateRequested()`: `fmi2GetBooleanStatus(fmi2Terminated)`
+  answers it. A slave that wants the simulation to end returns false from
+  `DoStep` (or throws `DiscardError`), since importers ask only after a
+  discarded step, and true from `TerminateRequested()`. The default is false,
+  as before. An exception from it becomes the status of
+  `fmi2GetBooleanStatus`, as from any other slave function. Not used with
+  FMI 1.0.
 - `cppfmu::DiscardError`, for a call that failed but changed nothing, so that
   the importer may go on, for example with other arguments or a smaller step.
   It becomes `fmi3Discard` from every FMI 3.0 function, and leaves the

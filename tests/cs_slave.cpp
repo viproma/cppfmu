@@ -189,6 +189,14 @@ public:
         if (communicationStepSize == 0.25) {
             throw cppfmu::DiscardError("a step of 0.25 is not possible");
         }
+        // A step longer than 4.0 makes TerminateRequested() throw.
+        if (communicationStepSize > 4.0) {
+            terminateThrows_ = true;
+        }
+        // A step longer than 2.5 also asks to end the simulation.
+        if (communicationStepSize > 2.5) {
+            terminateRequested_ = true;
+        }
         // A step longer than 1.0 is discarded after 1.0.
         if (communicationStepSize > 1.0) {
             endOfStep = currentCommunicationPoint + 1.0;
@@ -197,8 +205,24 @@ public:
         return true;
     }
 
+    bool TerminateRequested() const override
+    {
+        if (terminateThrows_) {
+            throw std::runtime_error("cannot tell whether to terminate");
+        }
+        return terminateRequested_;
+    }
+
+    void Reset() override
+    {
+        terminateRequested_ = false;
+        terminateThrows_ = false;
+    }
+
 private:
     cppfmu::Memory memory_;
+    bool terminateRequested_ = false;
+    bool terminateThrows_ = false;
     cppfmu::FMIReal value_ = 0.0;
     bool derivativeSupported_ = false;
     cppfmu::FMIReal seed_ = 1.0;
